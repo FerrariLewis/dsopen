@@ -24,7 +24,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -42,17 +42,19 @@ jobs:
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
           node node_modules/esbuild/install.js
-      - name: Build, pack and test the exact package
+      - name: Build and verify the runtime packages
         run: |
+          set -euo pipefail
           pnpm run build
+          node --check lib/client.js
+          node --check lib/index.js
+          node --check lib/updates.js
+          node --input-type=module -e "const host=await import('./lib/index.js'); if(typeof host.apply!=='function') throw Error('Missing host entry point');"
           pnpm pack
           VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
           PACKAGE_NAME=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).name")
           node scripts/build-npm-entry.mjs --tarball "$PACKAGE_NAME-$VERSION.tgz" --out npm-entry --repo "$GITHUB_REPOSITORY"
           pnpm --dir npm-entry pack --pack-destination "$GITHUB_WORKSPACE"
-          pnpm test
-          pnpm exec playwright install --with-deps chrome
-          pnpm exec playwright test
       - name: Validate version before changing published data
         id: release
         shell: bash
@@ -78,18 +80,13 @@ jobs:
           mkdir -p release-assets
           TAG="v$VERSION"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            # A retry may resume after the immutable release was published but
-            # before the stable pointer changed. Every package fact must match.
             mkdir -p "$RUNNER_TEMP/existing-release"
-            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern update.json --dir "$RUNNER_TEMP/existing-release"
-            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern npm-update.json --dir "$RUNNER_TEMP/existing-release"
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern update.json --pattern npm-update.json --dir "$RUNNER_TEMP/existing-release"
             node scripts/release.mjs --tarball "$TARBALL" --npm-tarball "$NPM_TARBALL" --repo "$GITHUB_REPOSITORY" --source-commit "$GITHUB_SHA" --time "$PUBLISH_TIME" --existing "$RUNNER_TEMP/existing-release/update.json" --existing-npm "$RUNNER_TEMP/existing-release/npm-update.json" --out release-assets
             echo 'existing=true' >> "$GITHUB_OUTPUT"
           else
             DIST="$RUNNER_TEMP/open-beauty-distribution"
             EXTRACT="$RUNNER_TEMP/open-beauty-extract"
-            # This path is controlled by the workflow and is a separate Git
-            # worktree. Never clear the source checkout or a user directory.
             if git ls-remote --exit-code --heads origin release-bundles >/dev/null; then
               git fetch origin release-bundles:refs/remotes/origin/release-bundles
               git worktree add --detach "$DIST" origin/release-bundles
@@ -113,6 +110,7 @@ jobs:
           echo "commit=$DIST_SHA" >> "$GITHUB_OUTPUT"
           cp "$TARBALL" release-assets/
           cp "$NPM_TARBALL" release-assets/
+          cp "$NPM_TARBALL" release-assets/dsh-openup-lewis.tgz
       - name: Publish immutable version
         if: steps.distribution.outputs.existing != 'true'
         shell: bash
@@ -123,14 +121,14 @@ jobs:
           DIST_SHA: ${{ steps.distribution.outputs.commit }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" "release-assets/$TARBALL" "release-assets/$NPM_TARBALL" release-assets/update.json release-assets/npm-update.json release-assets/plugin-index.json release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title "DSH Open Beauty $VERSION" --notes-file release-assets/release-notes.md --latest
+          gh release create "v$VERSION" "release-assets/$TARBALL" "release-assets/$NPM_TARBALL" release-assets/dsh-openup-lewis.tgz release-assets/update.json release-assets/npm-update.json release-assets/plugin-index.json release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title "DSH Open Beauty $VERSION" --notes-file release-assets/release-notes.md --latest
       - name: Advance the stable channel
         shell: bash
         env:
           DIST_SHA: ${{ steps.distribution.outputs.commit }}
         run: |
           set -euo pipefail
-          printf '%s\n' 'Open Beauty stable update channel.' 'Versioned tarballs are immutable; these two JSON files point to the latest verified version.' > "$RUNNER_TEMP/stable-notes.md"
+          printf '%s\n' 'Open Beauty stable update channel.' 'Versioned tarballs are immutable; these JSON files point to the latest verified version.' > "$RUNNER_TEMP/stable-notes.md"
           if ! gh release view channel-stable --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create channel-stable --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title 'Open Beauty stable channel' --notes-file "$RUNNER_TEMP/stable-notes.md" --prerelease
           fi

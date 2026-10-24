@@ -1,13 +1,7 @@
 node_modules/
-test-results/
-playwright-report/
-.preview-data/
+lib/
 *.tgz
 *.log
-work/
 release-assets/
-
-lib/
-preview/app.js
 npm-entry/
 npm-release/

@@ -16,12 +16,6 @@ await build({
   banner: { js: 'window.__ModuleLoader__.load({ id: "dsh-boot-studio", factory: (require) => { var module = { exports: {} }; var exports = module.exports;' },
   footer: { js: 'return module.exports; } });' },
 })
-await build({
-  ...common,
-  entryPoints: [join(root, 'preview/main.jsx')],
-  outfile: join(root, 'preview/app.js'),
-  format: 'iife', platform: 'browser', minify: true,
-})
 const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 await writeFile(join(root, 'lib/build-info.json'), JSON.stringify({ version: pkg.version, format: 'DSH ModuleLoader CJS + Node ESM', source: ['src/client.jsx', 'src/host.js'] }, null, 2) + '\n')
-console.log(`Built dsh-boot-studio ${pkg.version}: host, DSH client, and offline preview.`)
+console.log(`Built dsh-boot-studio ${pkg.version}: host and DSH client.`)
