@@ -1,6 +1,6 @@
-`github:FerrariLewis/dsh-#release-bundles`
+`https://github.com/FerrariLewis/dsh-/releases/download/v1.2.1/dsh-boot-studio-1.2.1.tgz`
 
-在 **DeepSeek Harness → 插件 → 添加插件 → 包名或地址** 中粘贴上方安装码，点击安装并启用。GitHub 安装码无需 npm 账号。
+在 **DeepSeek Harness → 插件 → 添加插件 → 包名或地址** 中粘贴上方安装码，点击安装并启用。这个安装地址不需要本机 Git，也不需要 npm 账号。
 
 **短安装码：`dsh-openup-lewis`（待 npm 首次发布，暂未生效）。** 短码发布成功后，可在同一个输入框直接使用；仅上传 GitHub 不会注册 npm 包名。当前请使用第一行的 GitHub 安装码。
 
@@ -16,11 +16,9 @@
 
 在 Harness 的 **插件 → 添加插件** 中粘贴 README 第一行的接入代码，按提示安装并启用。需要时完全退出后重新打开 Harness。
 
-```sh
-dsh plugin --profile desktop add "github:FerrariLewis/dsh-#release-bundles"
-```
+第一行是 **1.2.1 的预构建安装包直链**，由 Harness 直接下载并安装，不需要在终端输入命令，也不调用本机 Git。安装后可以在“设置 → 开机动画 → 版本与更新”继续原位更新。
 
-Web 版将 `desktop` 换成 `web`。`release-bundles` 是自动维护的预构建分支，使用者无需编译。首次发布工作流完成后，该接入代码生效。
+如果安装时出现 `ERR_PNPM_GIT_RESOLVE_FAILED`，并提示找不到 `git`，请使用第一行的安装包直链。已安装 Git 的电脑也可以使用分支地址 `github:FerrariLewis/dsh-#release-bundles`。
 
 ## 像游戏一样开启
 
