@@ -1,4 +1,4 @@
-`https://github.com/FerrariLewis/dsh-/releases/latest/download/dsh-openup-lewis.tgz`
+`https://github.com/FerrariLewis/open/releases/latest/download/dsh-openup-lewis.tgz`
 
 # DSH Open Beauty · 开场美学
 
@@ -38,7 +38,7 @@
 | --- | --- |
 | 产品名称 | DSH Open Beauty · 开场美学 |
 | 插件名称 | dsh-openup-lewis |
-| 当前版本 | 1.2.2 |
+| 当前版本 | 1.2.3 |
 | 作者 | FerrariLewis |
 | 适用版本 | DeepSeek Harness ≥ 0.2.1-rc.2 且 < 0.3.0 |
 | 安装方法 | 在 Harness → 插件 → 添加插件 → 包名或地址中，粘贴本文第一行的完整地址，安装并启用后重新打开 Harness。无需 Git、npm 账号或命令行。 |
