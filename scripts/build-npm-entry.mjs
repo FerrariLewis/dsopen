@@ -78,6 +78,9 @@ export async function buildNpmEntry({ tarball, out, repo }) {
   // Runtime code and media are fully present; end users need no build or wrapper dependency.
   for (const key of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies', 'peerDependenciesMeta', 'bundledDependencies', 'bundleDependencies', 'scripts', 'private', 'packageManager']) delete manifest[key];
   files.set('package.json', Buffer.from(JSON.stringify(manifest, null, 2) + '\n'));
+  const readme = files.get('README.md')?.toString('utf8');
+  if (!readme?.trim()) throw new Error('npm 分发包缺少产品说明。');
+  files.set('README.md', Buffer.from(readme.replace(/^[^\r\n]*(?:\r?\n|$)/, '`' + NPM_PACKAGE_NAME + '`\n')));
   files.set('cordis.patch.yml', Buffer.from(`- insert:\n    - id: ${NPM_PACKAGE_NAME}\n      name: ${NPM_PACKAGE_NAME}\n`));
   files.set('lib/client.js', Buffer.from(NPM_CLIENT_HEADER + client.slice(CLIENT_HEADER.length)));
   // Do all validation before creating a new directory. Never overwrite an existing output.

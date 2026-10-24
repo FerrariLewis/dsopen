@@ -38,12 +38,12 @@
 | --- | --- |
 | 产品名称 | DSH Open Beauty · 开场美学 |
 | 插件名称 | dsh-openup-lewis |
-| 当前版本 | 1.2.3 |
+| 当前版本 | 1.2.4 |
 | 作者 | FerrariLewis |
 | 适用版本 | DeepSeek Harness ≥ 0.2.1-rc.2 且 < 0.3.0 |
-| 安装方法 | 在 Harness → 插件 → 添加插件 → 包名或地址中，粘贴本文第一行的完整地址，安装并启用后重新打开 Harness。无需 Git、npm 账号或命令行。 |
+| 安装方法 | 在 Harness → 插件 → 添加插件 → 包名或地址中，粘贴本文第一行的安装码，安装并启用后重新打开 Harness。无需 Git、npm 账号或命令行。 |
 | 设置入口 | 设置 → 开机动画 |
 | 视频格式 | MP4 / M4V / WebM，单个文件最大 200 MB |
 | 图片格式 | PNG / JPEG / WebP，单张图片最大 20 MB |
-| 更新入口 | 设置 → 开机动画 → 版本与更新 |
+| 更新入口 | 设置 → 开机动画 → 版本与更新；npm 分发版从 npm 源获取更新。 |
 | 开源许可 | [BSD-3-Clause](LICENSE)；素材来源与授权见[第三方说明](THIRD_PARTY_NOTICES.md)。 |

@@ -11,6 +11,81 @@ export function updateManifestUrl(packageName, repo = UPDATE_REPOSITORY) {
   return `https://github.com/${repo}/releases/download/channel-stable/${filename}`;
 }
 const MAX_PACKAGE_BYTES = 80 * 1024 * 1024;
+const NPM_REGISTRIES = ['https://registry.npmjs.org', 'https://registry.npmmirror.com'];
+
+function repositoryMatches(value, repo) {
+  const url = typeof value === 'string' ? value : value?.url;
+  return typeof url === 'string' && url.replace(/^git\+/, '').replace(/\/$/, '').replace(/\.git$/, '') === `https://github.com/${repo}`;
+}
+function registryFailure(message) { const error = new Error(message); error.retryRegistry = true; return error; }
+function allowedRegistryURL(value) {
+  const url = new URL(value);
+  return url.protocol === 'https:' && !url.username && !url.password && !url.port &&
+    (url.hostname === 'registry.npmjs.org' || url.hostname === 'registry.npmmirror.com' || url.hostname.endsWith('.npmmirror.com'));
+}
+/** Follow only npm registry/CDN redirects; never make a redirected GitHub request. */
+async function registryResponse(fetchImpl, input, signal) {
+  let url = input;
+  for (let hop = 0; hop < 5; hop++) {
+    if (!allowedRegistryURL(url)) throw new Error('npm 更新请求离开了允许的注册表。');
+    let response;
+    try { response = await fetchImpl(url, { signal, redirect: 'manual', headers: { accept: input.endsWith('.tgz') ? 'application/octet-stream' : 'application/json', 'user-agent': 'DSH-Open-Beauty-Updater' } }); }
+    catch (error) { throw registryFailure(error.name === 'TimeoutError' ? '连接 npm 注册表超时。' : '无法连接 npm 注册表。'); }
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    const location = response.headers.get('location');
+    await response.body?.cancel().catch(() => {});
+    if (!location) throw new Error('npm 注册表返回了无效跳转。');
+    url = new URL(location, url).href;
+  }
+  throw new Error('npm 注册表跳转次数过多。');
+}
+async function registryBytes(response, limit, signal) {
+  try { return await responseBytes(response, limit, signal); }
+  catch (error) {
+    if (signal.aborted || ['TimeoutError', 'AbortError', 'TypeError'].includes(error.name)) throw registryFailure('读取 npm 注册表内容失败。');
+    throw error;
+  }
+}
+export function validateNpmManifest(value, { packageName = NPM_ENTRY_NAME, repo = UPDATE_REPOSITORY, registry = NPM_REGISTRIES[0] } = {}) {
+  if (!value || typeof value !== 'object' || value.name !== packageName || packageName !== NPM_ENTRY_NAME) throw new Error('npm 更新包标识与当前插件不一致。');
+  versionParts(value.version);
+  if (!repositoryMatches(value.repository, repo)) throw new Error('npm 更新包的仓库标识不属于本项目。');
+  if (!NPM_REGISTRIES.includes(registry)) throw new Error('不支持的 npm 注册表。');
+  const path = `/${packageName}/-/${packageName}-${value.version}.tgz`;
+  if (!NPM_REGISTRIES.some(origin => value.dist?.tarball === origin + path)) throw new Error('npm 更新包地址不属于允许的注册表和版本。');
+  const integrity = value.dist?.integrity;
+  if (typeof integrity !== 'string' || !/^sha512-[A-Za-z0-9+/]{86}==$/.test(integrity) || Buffer.from(integrity.slice(7), 'base64').toString('base64') !== integrity.slice(7)) throw new Error('npm 更新包缺少有效的 SHA-512 完整性信息。');
+  return { source: 'npm', packageName, version: value.version, integrity,
+    tarballUrls: [registry, ...NPM_REGISTRIES.filter(origin => origin !== registry)].map(origin => origin + path),
+    tarballUrl: registry + path, releaseNotesUrl: `https://www.npmjs.com/package/${packageName}/v/${value.version}`, requiresRestart: true };
+}
+async function npmManifest(fetchImpl, packageName, repo) {
+  let failure;
+  for (const registry of NPM_REGISTRIES) {
+    try {
+      const signal = AbortSignal.timeout(7000);
+      const response = await registryResponse(fetchImpl, `${registry}/${packageName}/latest`, signal);
+      if (response.status === 404) return null;
+      if (!response.ok) throw registryFailure(`npm 注册表返回 HTTP ${response.status}。`);
+      return validateNpmManifest(JSON.parse((await registryBytes(response, 65536, signal)).toString('utf8')), { packageName, repo, registry });
+    } catch (error) { if (!error.retryRegistry) throw error; failure = error; }
+  }
+  throw failure;
+}
+async function npmArchive(fetchImpl, manifest) {
+  let failure;
+  for (const url of manifest.tarballUrls) {
+    try {
+      const signal = AbortSignal.timeout(60000);
+      const response = await registryResponse(fetchImpl, url, signal);
+      if (!response.ok) throw registryFailure(`npm 更新包下载失败（HTTP ${response.status}）。`);
+      const bytes = await registryBytes(response, MAX_PACKAGE_BYTES, signal);
+      if ('sha512-' + createHash('sha512').update(bytes).digest('base64') !== manifest.integrity) throw new Error('npm 更新包 SHA-512 校验失败，未执行更新。');
+      return bytes;
+    } catch (error) { if (!error.retryRegistry) throw error; failure = error; }
+  }
+  throw failure;
+}
 
 function versionParts(value) {
   if (typeof value !== 'string' || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(value)) throw new Error('维护版本必须使用 X.Y.Z 稳定版本号。');
@@ -95,6 +170,12 @@ export function createUpdateService({dataDir,packageFile,fetchImpl=fetch,repo=UP
       const local=await identity();
       const signal=AbortSignal.timeout(15000);
       try {
+        if (local.packageName === NPM_ENTRY_NAME) {
+          const manifest = await npmManifest(fetchImpl, local.packageName, repo);
+          if (!manifest) return { ...local, available: false, channelReady: false, message: 'npm 版本尚未发布，当前版本可以继续使用。' };
+          const available = isNewerVersion(manifest.version, local.currentVersion);
+          return { ...local, available, channelReady: true, latestVersion: manifest.version, manifest, message: available ? '有新版本可用。' : '当前已是最新版本。' };
+        }
         const response=await fetchImpl(manifestUrl ?? updateManifestUrl(local.packageName, repo),{signal,headers:{accept:'application/json','user-agent':'DSH-Open-Beauty-Updater'}});
         if(response.status===404)return {...local,available:false,channelReady:false,message:'维护通道尚未发布，当前版本可以继续使用。'};
         if(!response.ok)throw new Error(`维护服务返回 HTTP ${response.status}。`);
@@ -117,19 +198,25 @@ export function createUpdateService({dataDir,packageFile,fetchImpl=fetch,repo=UP
       const status=await check();
       if(!status.channelReady||!status.available||status.latestVersion!==requestedVersion)throw new Error('更新版本已变化或尚未发布，请重新检查更新。');
       const manifest=status.manifest;
-      const signal=AbortSignal.timeout(120000);
-      const response=await fetchImpl(manifest.tarballUrl,{signal,headers:{'user-agent':'DSH-Open-Beauty-Updater'}});
-      if(!response.ok)throw new Error(`更新包下载失败（HTTP ${response.status}）。`);
-      const bytes=await responseBytes(response,Math.min(MAX_PACKAGE_BYTES,manifest.bytes),signal);
-      if(bytes.length!==manifest.bytes||createHash('sha256').update(bytes).digest('hex')!==manifest.sha256)throw new Error('更新包 SHA-256 或大小校验失败，未执行更新。');
+      let bytes;
+      if (manifest.source === 'npm') bytes = await npmArchive(fetchImpl, manifest);
+      else {
+        const signal=AbortSignal.timeout(120000);
+        const response=await fetchImpl(manifest.tarballUrl,{signal,headers:{'user-agent':'DSH-Open-Beauty-Updater'}});
+        if(!response.ok)throw new Error(`更新包下载失败（HTTP ${response.status}）。`);
+        bytes=await responseBytes(response,Math.min(MAX_PACKAGE_BYTES,manifest.bytes),signal);
+        if(bytes.length!==manifest.bytes||createHash('sha256').update(bytes).digest('hex')!==manifest.sha256)throw new Error('更新包 SHA-256 或大小校验失败，未执行更新。');
+      }
       const pkg=readPackageManifest(bytes);
       if(pkg.name!==status.packageName||pkg.version!==manifest.version||!pkg.dsh?.bundle?.patch)throw new Error('更新包的名称、版本或插件声明不匹配。');
       for(const key of ['preinstall','install','postinstall','prepare','preprepare','postprepare'])if(pkg.scripts?.[key])throw new Error('维护包包含安装脚本，请通过 Harness 插件管理器人工检查。');
+      if (manifest.source === 'npm' && (!repositoryMatches(pkg.repository, repo) || ['dependencies', 'optionalDependencies', 'peerDependencies'].some(key => Object.keys(pkg[key] ?? {}).length))) throw new Error('npm 更新包必须属于本项目且不含运行依赖。');
+      const sha256 = createHash('sha256').update(bytes).digest('hex');
       await mkdir(cacheDir,{recursive:true});await cleanOld();
-      const path=join(cacheDir,`${pkg.name}-${pkg.version}-${manifest.sha256}.tgz`);
+      const path=join(cacheDir,`${pkg.name}-${pkg.version}-${sha256}.tgz`);
       const temp=join(cacheDir,`${randomUUID()}.part`);
       try{await writeFile(temp,bytes,{flag:'wx'});await rename(temp,path);}finally{await unlink(temp).catch(()=>{});}
-      return {version:manifest.version,spec:path,sha256:manifest.sha256,requiresRestart:true};
+      return {version:manifest.version,spec:path,sha256,requiresRestart:true};
     })();
     try{return await preparing;}finally{preparing=null;preparingVersion=null;}
   }
