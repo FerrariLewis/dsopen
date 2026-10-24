@@ -371,7 +371,7 @@ async function mockMaintenance(page,{channelReady=true,prepareError=null,rpcStat
     if(path.endsWith('/status'))return route.fulfill({json:{packageName:'dsh-boot-studio',currentVersion:'1.2.0'}})
     if(path.endsWith('/check')){
       calls.check.push({method:req.method(),body:req.postDataJSON()})
-      return route.fulfill({json:channelReady?{currentVersion:'1.2.0',available:true,channelReady:true,latestVersion:'1.3.0',manifest:{releaseNotesUrl:'https://github.com/FerrariLewis/dsh-open-beauty/releases/tag/v1.3.0'},message:'有新版本可用。'}:{currentVersion:'1.2.0',available:false,channelReady:false,message:'维护通道尚未发布，当前版本可以继续使用。'}})
+      return route.fulfill({json:channelReady?{currentVersion:'1.2.0',available:true,channelReady:true,latestVersion:'1.3.0',manifest:{releaseNotesUrl:'https://github.com/FerrariLewis/dsh-/releases/tag/v1.3.0'},message:'有新版本可用。'}:{currentVersion:'1.2.0',available:false,channelReady:false,message:'维护通道尚未发布，当前版本可以继续使用。'}})
     }
     if(path.endsWith('/prepare')){
       calls.prepare.push({method:req.method(),body:req.postDataJSON()})

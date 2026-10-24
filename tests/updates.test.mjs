@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { gzipSync,gunzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
-import { createUpdateService,isNewerVersion,validateUpdateManifest,readPackageManifest,UPDATE_MANIFEST_URL } from '../src/updates.js';
+import { createUpdateService,isNewerVersion,validateUpdateManifest,readPackageManifest,UPDATE_MANIFEST_URL,updateManifestUrl,NPM_ENTRY_NAME } from '../src/updates.js';
 
 function tarball(pkg){
   const body=Buffer.from(JSON.stringify(pkg));const header=Buffer.alloc(512);
@@ -15,18 +15,36 @@ function tarball(pkg){
 }
 const pkg={name:'dsh-boot-studio',version:'1.3.0',dsh:{bundle:{patch:'./cordis.patch.yml'}}};
 const data=tarball(pkg);
-const manifest={format:1,packageName:pkg.name,version:pkg.version,commit:'a'.repeat(40),sourceCommit:'b'.repeat(40),publishTimestamp:1792800000,sha256:createHash('sha256').update(data).digest('hex'),bytes:data.length,tarballUrl:'https://github.com/FerrariLewis/dsh-open-beauty/releases/download/v1.3.0/dsh-boot-studio-1.3.0.tgz',requiresRestart:true};
-async function fixture(t,{update=manifest,archive=data,notPublished=false}={}){
+const manifest={format:1,packageName:pkg.name,version:pkg.version,commit:'a'.repeat(40),sourceCommit:'b'.repeat(40),publishTimestamp:1792800000,sha256:createHash('sha256').update(data).digest('hex'),bytes:data.length,tarballUrl:'https://github.com/FerrariLewis/dsh-/releases/download/v1.3.0/dsh-boot-studio-1.3.0.tgz',requiresRestart:true};
+async function fixture(t,{update=manifest,archive=data,notPublished=false,installedPackage=pkg}={}){
   const root=await mkdtemp(join(tmpdir(),'open-beauty-update-'));t.after(()=>rm(root,{recursive:true,force:true}));
-  const packageFile=join(root,'package.json');await writeFile(packageFile,JSON.stringify({...pkg,version:'1.2.0'}));
+  const packageFile=join(root,'package.json');await writeFile(packageFile,JSON.stringify({...installedPackage,version:'1.2.0'}));
   const settingsFile=join(root,'settings.json');await writeFile(settingsFile,'{"duration":3,"myVideo":"retain"}');
   const calls=[];
-  const service=createUpdateService({dataDir:root,packageFile,fetchImpl:async url=>{calls.push(String(url));if(String(url)===UPDATE_MANIFEST_URL)return notPublished?new Response('',{status:404}):new Response(JSON.stringify(update));if(String(url)===manifest.tarballUrl)return new Response(archive);throw Error('Unexpected URL');}});
+  const service=createUpdateService({dataDir:root,packageFile,fetchImpl:async url=>{calls.push(String(url));if(String(url)===updateManifestUrl(installedPackage.name))return notPublished?new Response('',{status:404}):new Response(JSON.stringify(update));if(String(url)===update.tarballUrl)return new Response(archive);throw Error('Unexpected URL');}});
   return {root,service,calls,settingsFile};
 }
 test('compares stable versions numerically and rejects invalid release metadata',()=>{
   assert.equal(isNewerVersion('1.10.0','1.2.0'),true);assert.equal(isNewerVersion('1.2.0','1.2.0'),false);assert.equal(isNewerVersion('1.1.9','1.2.0'),false);
   for(const change of [{version:'main'},{packageName:'another-plugin'},{tarballUrl:'https://example.com/code.tgz'},{sha256:'wrong'},{bytes:90*1024*1024},{requiresRestart:false}])assert.throws(()=>validateUpdateManifest({...manifest,...change},{packageName:pkg.name}));
+});
+
+test('the npm short-name package updates its own identity without installing a second core plugin',async t=>{
+  const installedPackage={...pkg,name:NPM_ENTRY_NAME};
+  const archive=tarball(installedPackage);
+  const update={...manifest,packageName:NPM_ENTRY_NAME,bytes:archive.length,sha256:createHash('sha256').update(archive).digest('hex'),tarballUrl:`https://github.com/FerrariLewis/dsh-/releases/download/v${pkg.version}/${NPM_ENTRY_NAME}-${pkg.version}.tgz`};
+  const f=await fixture(t,{update,archive,installedPackage});
+  assert.notEqual(updateManifestUrl(NPM_ENTRY_NAME),UPDATE_MANIFEST_URL);
+  assert.equal((await f.service.check()).packageName,NPM_ENTRY_NAME);
+  const prepared=await f.service.prepare(pkg.version);
+  assert.match(prepared.spec,/dsh-openup-lewis-/);
+  assert.equal(readPackageManifest(await readFile(prepared.spec)).name,NPM_ENTRY_NAME);
+  assert.equal(f.calls[0],updateManifestUrl(NPM_ENTRY_NAME));
+  assert.equal(f.calls.some(url=>url===UPDATE_MANIFEST_URL),false);
+  const wrongChannel=await fixture(t,{installedPackage});
+  const state=await wrongChannel.service.check();
+  assert.equal(state.channelReady,false);
+  assert.match(state.message,/标识/);
 });
 test('checking an unpublished channel is harmless and does not download or apply code',async t=>{
   const f=await fixture(t,{notPublished:true});const state=await f.service.check();assert.equal(state.channelReady,false);assert.equal(state.available,false);assert.equal(state.currentVersion,'1.2.0');assert.deepEqual(f.calls,[UPDATE_MANIFEST_URL]);assert.equal((await readdir(f.root)).includes('update-cache'),false);

@@ -3,8 +3,13 @@ import { gunzipSync } from 'node:zlib';
 import { mkdir, readFile, writeFile, rename, readdir, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export const UPDATE_REPOSITORY = 'FerrariLewis/dsh-open-beauty';
+export const UPDATE_REPOSITORY = 'FerrariLewis/dsh-';
 export const UPDATE_MANIFEST_URL = `https://github.com/${UPDATE_REPOSITORY}/releases/download/channel-stable/update.json`;
+export const NPM_ENTRY_NAME = 'dsh-openup-lewis';
+export function updateManifestUrl(packageName, repo = UPDATE_REPOSITORY) {
+  const filename = packageName === NPM_ENTRY_NAME ? 'npm-update.json' : 'update.json';
+  return `https://github.com/${repo}/releases/download/channel-stable/${filename}`;
+}
 const MAX_PACKAGE_BYTES = 80 * 1024 * 1024;
 
 function versionParts(value) {
@@ -80,7 +85,7 @@ async function responseBytes(response,limit,signal) {
 }
 
 /** Only checks and stages verified files. Installation belongs to the owner's official Remote API. */
-export function createUpdateService({dataDir,packageFile,fetchImpl=fetch,repo=UPDATE_REPOSITORY,now=()=>Date.now(),manifestUrl=UPDATE_MANIFEST_URL}={}) {
+export function createUpdateService({dataDir,packageFile,fetchImpl=fetch,repo=UPDATE_REPOSITORY,now=()=>Date.now(),manifestUrl}={}) {
   const cacheDir=join(dataDir,'update-cache');
   let checking=null,preparing=null,preparingVersion=null;
   async function identity(){const pkg=JSON.parse(await readFile(packageFile,'utf8'));versionParts(pkg.version);return {packageName:pkg.name,currentVersion:pkg.version};}
@@ -90,7 +95,7 @@ export function createUpdateService({dataDir,packageFile,fetchImpl=fetch,repo=UP
       const local=await identity();
       const signal=AbortSignal.timeout(15000);
       try {
-        const response=await fetchImpl(manifestUrl,{signal,headers:{accept:'application/json','user-agent':'DSH-Open-Beauty-Updater'}});
+        const response=await fetchImpl(manifestUrl ?? updateManifestUrl(local.packageName, repo),{signal,headers:{accept:'application/json','user-agent':'DSH-Open-Beauty-Updater'}});
         if(response.status===404)return {...local,available:false,channelReady:false,message:'维护通道尚未发布，当前版本可以继续使用。'};
         if(!response.ok)throw new Error(`维护服务返回 HTTP ${response.status}。`);
         const manifest=validateUpdateManifest(JSON.parse((await responseBytes(response,65536,signal)).toString('utf8')),{packageName:local.packageName,repo});

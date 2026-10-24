@@ -1,0 +1,48 @@
+name: Publish npm short name
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Publish Open Beauty']
+    branches: [main, master]
+    types: [completed]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: open-beauty-npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Use an npm CLI supporting trusted publishing
+        run: npm install --global npm@11 --ignore-scripts
+      - name: Download the exact GitHub Release package
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
+          mkdir -p npm-release
+          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern "dsh-openup-lewis-$VERSION.tgz" --pattern npm-update.json --dir npm-release
+      - name: Verify package and publish using npm trusted publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
+          node scripts/publish-npm-entry.mjs --tarball "npm-release/dsh-openup-lewis-$VERSION.tgz" --metadata npm-release/npm-update.json --repo "$GITHUB_REPOSITORY"

@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildIndex } from './generate-index.mjs';
+import { NPM_ENTRY_NAME } from '../src/updates.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SHA = /^[a-f0-9]{40}$/;
@@ -87,7 +88,7 @@ function parse(argv) {
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i];
     if (key === '--help') { result.help = true; continue; }
-    if (!['--tarball', '--repo', '--commit', '--source-commit', '--time', '--previous', '--existing', '--out'].includes(key)) throw new Error(`未知参数：${key}`);
+    if (!['--tarball', '--npm-tarball', '--repo', '--commit', '--source-commit', '--time', '--previous', '--existing', '--existing-npm', '--out'].includes(key)) throw new Error(`未知参数：${key}`);
     const value = argv[++i];
     if (!value || value.startsWith('--')) throw new Error(`${key} 缺少值。`);
     result[key.slice(2)] = value;
@@ -118,6 +119,14 @@ export async function main(argv = process.argv.slice(2)) {
     update = { ...update, commit };
   }
   const index = buildIndex({ manifest: artifact.manifest, repo, commit, publishTimestamp });
+  let npmArtifact, npmUpdate;
+  if (args['existing-npm'] && !args['npm-tarball']) throw new Error('--existing-npm 需要 --npm-tarball。');
+  if (args['npm-tarball']) {
+    npmArtifact = await inspectTarball(args['npm-tarball']);
+    if (npmArtifact.manifest.name !== NPM_ENTRY_NAME || npmArtifact.manifest.version !== artifact.manifest.version) throw new Error('npm 短名称包的名称或版本与本次发布不一致。');
+    npmUpdate = buildUpdate({ ...npmArtifact, repo, commit: update.sourceCommit, sourceCommit: update.sourceCommit, publishTimestamp });
+    if (args['existing-npm']) assertExistingRelease(npmUpdate, JSON.parse(await readFile(resolve(args['existing-npm']), 'utf8')));
+  }
   // Product display name is independent of the stable internal package id.
   index.title = { en: 'DSH Open Beauty', zh: 'Open Beauty 开场美学' };
   index.description = { en: 'Stable Open Beauty releases for DeepSeek Harness.', zh: 'Open Beauty 的稳定版本与更新目录。' };
@@ -125,8 +134,9 @@ export async function main(argv = process.argv.slice(2)) {
   const out = resolve(args.out || join(ROOT, 'release-assets'));
   await mkdir(out, { recursive: true });
   await writeFile(join(out, 'update.json'), JSON.stringify(update, null, 2) + '\n');
+  if (npmUpdate) await writeFile(join(out, 'npm-update.json'), JSON.stringify(npmUpdate, null, 2) + '\n');
   await writeFile(join(out, 'plugin-index.json'), JSON.stringify(index, null, 2) + '\n');
-  await writeFile(join(out, 'SHA256SUMS.txt'), `${artifact.sha256}  ${artifact.manifest.name.replace('/', '-')}-${artifact.manifest.version}.tgz\n`);
+  await writeFile(join(out, 'SHA256SUMS.txt'), `${artifact.sha256}  ${artifact.manifest.name.replace('/', '-')}-${artifact.manifest.version}.tgz\n` + (npmArtifact ? `${npmArtifact.sha256}  ${NPM_ENTRY_NAME}-${npmArtifact.manifest.version}.tgz\n` : ''));
   await writeFile(join(out, 'release-notes.md'), `DSH Open Beauty ${update.version}\n\n源码提交：${update.sourceCommit}\n构建提交：${update.commit}\n\n使用插件设置中的检查更新进行原位升级，无需先卸载。升级后重新打开 Harness。个人视频、图片和播放偏好保留。\n\nSHA-256：${update.sha256}\n`);
   console.log(`Release metadata verified: ${update.packageName}@${update.version}\nDistribution commit: ${update.commit}\nImmutable tarball: ${update.tarballUrl}\nOutput: ${out}`);
 }

@@ -1,0 +1,13 @@
+node_modules/
+test-results/
+playwright-report/
+.preview-data/
+*.tgz
+*.log
+work/
+release-assets/
+
+lib/
+preview/app.js
+npm-entry/
+npm-release/

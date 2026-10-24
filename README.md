@@ -1,4 +1,8 @@
-`github:FerrariLewis/dsh-open-beauty#release-bundles`
+`github:FerrariLewis/dsh-#release-bundles`
+
+在 **DeepSeek Harness → 插件 → 添加插件 → 包名或地址** 中粘贴上方安装码，点击安装并启用。GitHub 安装码无需 npm 账号。
+
+**短安装码：`dsh-openup-lewis`（待 npm 首次发布，暂未生效）。** 短码发布成功后，可在同一个输入框直接使用；仅上传 GitHub 不会注册 npm 包名。当前请使用第一行的 GitHub 安装码。
 
 # DSH Open Beauty · 开场美学
 
@@ -13,7 +17,7 @@
 在 Harness 的 **插件 → 添加插件** 中粘贴 README 第一行的接入代码，按提示安装并启用。需要时完全退出后重新打开 Harness。
 
 ```sh
-dsh plugin --profile desktop add "github:FerrariLewis/dsh-open-beauty#release-bundles"
+dsh plugin --profile desktop add "github:FerrariLewis/dsh-#release-bundles"
 ```
 
 Web 版将 `desktop` 换成 `web`。`release-bundles` 是自动维护的预构建分支，使用者无需编译。首次发布工作流完成后，该接入代码生效。
@@ -57,10 +61,21 @@ Web 版将 `desktop` 换成 `web`。`release-bundles` 是自动维护的预构�
 
 内部包ID `dsh-boot-studio` 和用户数据目录保持不变，保证同一插件原位升级。不要用同版本号替换不同的包。
 
+### 启用一词安装码（维护者只需做一次）
+
+`dsh-openup-lewis` 是完整预构建的 npm 分发包，不需要安装者编译。它与 GitHub 分发包使用同一份源码与素材，保留相同的个人设置目录，并通过独立维护清单更新自身。
+
+1. 在 [npm](https://www.npmjs.com/signup) 注册并验证邮箱，按 npm 发布要求完成账号验证。
+2. 从本仓库最新版本 Release 下载 `dsh-openup-lewis-版本号.tgz`。在本机运行 `npm login`，再运行 `npm publish 下载文件的完整路径 --access public --ignore-scripts` 完成首次公开发布。
+3. 在该 npm 包的 **Settings → Trusted publishing** 添加 GitHub Actions：用户 `FerrariLewis`、仓库 `dsh-`、工作流文件 `publish-npm.yml`，允许直接 `npm publish`。无需提供长期令牌。
+4. 确认 npm 已能查询到该包，并在 Harness 实装成功，再将 README 第一行改为 `dsh-openup-lewis`，移除“待首次发布”提示。
+
+后续提高源码版本并提交，GitHub 发布完成后会自动发布对应的 npm 版本。未完成 npm 首发时，该自动流程会明确提示待配置，GitHub 安装方式照常可用。已安装用户在插件设置内检查更新即可；两种分发方式任选一种安装。
+
 Harness“发现”的索引源地址：
 
 ```text
-https://github.com/FerrariLewis/dsh-open-beauty/releases/download/channel-stable/plugin-index.json
+https://github.com/FerrariLewis/dsh-/releases/download/channel-stable/plugin-index.json
 ```
 
 添加后搜索 Open Beauty 或“开机动画”。索引和维护通道在首次发布成功后生效。
