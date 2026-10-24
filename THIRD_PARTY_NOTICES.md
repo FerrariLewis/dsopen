@@ -22,36 +22,6 @@ The upstream LICENSE explicitly states that its `media/*.mp4` inputs and embedde
 | `assets/deepseek-awakening-intro.mp4` | `media/deepseek-awakening-intro.mp4` | `ff5afe0dabc16e09d5d1d4a349a551173a872f5c9850c0aab358ebaaf4b09712` |
 | `assets/deepseek-startup-intro.mp4` | `media/deepseek-startup-intro.mp4` | `ba72c501021444cd4bd89ce2cf547a539dfb0874c985a03859d048ee013acb4f` |
 
-## React, React DOM, and Scheduler in the standalone preview
-
-The standalone preview bundles React, React DOM, and Scheduler. Their source copyright notices are retained by the build in `preview/app.js`. The complete MIT License from the installed packages is reproduced below.
-
-The installed DSH client uses the host's React runtime rather than shipping a second React runtime.
-
-```text
-MIT License
-
-Copyright (c) Facebook, Inc. and its affiliates.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
 ## 用户上传的视频
 
 用户上传的视频保存在本机的数据目录，不会作为本插件的内置素材再分发。上述媒体授权说明只适用于本插件附带的四段上游视频。
@@ -60,7 +30,7 @@ SOFTWARE.
 
 The technical dossier startup sequence reuses the **actual original code and stylesheet**, copied unchanged from `lib/splash.js` and `lib/splash.css` in [6shenhonghong9/dsh-startup-screen](https://github.com/6shenhonghong9/dsh-startup-screen), revision [`8ec3132e69f0906b3ed2f7eb083b1035cd69c1d4`](https://github.com/6shenhonghong9/dsh-startup-screen/tree/8ec3132e69f0906b3ed2f7eb083b1035cd69c1d4).
 
-Copyright (c) 2026 沈宏宏. MIT License. The full upstream license is reproduced in [assets/startup-screen/LICENSE](assets/startup-screen/LICENSE), beside the original source files and an [adapter notice](assets/startup-screen/NOTICE.md).
+Copyright (c) 2026 沈宏宏. MIT License. Installation packages contain the compiled visual implementation, the full upstream license in [assets/startup-screen/LICENSE](assets/startup-screen/LICENSE), and an [adapter notice](assets/startup-screen/NOTICE.md). The original source files and adapter are preserved in the [source repository](https://github.com/FerrariLewis/dsh-/tree/main/assets/startup-screen).
 
 Boot Studio supplies an isolated React/Shadow DOM adapter, automatic progression through the original confirmation scenes, centralized keyboard/pointer input, and synchronous audio/timer cleanup. The original runtime's outer IIFE becomes a function receiving private window/document/event/storage objects; the animation core is retained. The original plugin's settings, storage, global keyboard handlers and host injection are not installed into Harness.
 

@@ -1,5 +1,5 @@
 {
-  "version": "1.2.1",
+  "version": "1.2.2",
   "format": "DSH ModuleLoader CJS + Node ESM",
   "source": [
     "src/client.jsx",
