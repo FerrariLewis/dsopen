@@ -9,7 +9,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HELP = `生成 Harness「发现」索引（Node.js 20+，无需 npm install）
 
   node scripts/generate-index.mjs
-  node scripts/generate-index.mjs --repo FerrariLewis/dsh- --commit <40位SHA> --time <ISO时间>
+  node scripts/generate-index.mjs --repo FerrariLewis/open --commit <40位SHA> --time <ISO时间>
 
 --repo    GitHub 的 owner/repo；默认读取 package.json.repository
 --commit  完整的 40 位提交 SHA；默认读取 git HEAD

@@ -1,6 +1,6 @@
 {
   "name": "dsh-boot-studio",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "DSH Open Beauty：原片完整开场、任意键进入、三款游戏标题封面，可自定义视频和结束图片，支持原位更新。",
   "type": "module",
   "main": "./lib/index.js",
@@ -25,11 +25,11 @@
   "author": "FerrariLewis",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/FerrariLewis/dsh-.git"
+    "url": "git+https://github.com/FerrariLewis/open.git"
   },
-  "homepage": "https://github.com/FerrariLewis/dsh-#readme",
+  "homepage": "https://github.com/FerrariLewis/open#readme",
   "bugs": {
-    "url": "https://github.com/FerrariLewis/dsh-/issues"
+    "url": "https://github.com/FerrariLewis/open/issues"
   },
   "keywords": [
     "dsh-openup-lewis",
