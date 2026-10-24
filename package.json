@@ -1,0 +1,84 @@
+{
+  "name": "dsh-boot-studio",
+  "version": "1.2.1",
+  "description": "DSH Open Beauty：原片完整开场、任意键进入、三款游戏标题封面，可自定义视频和结束图片，支持原位更新。",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": [
+    "lib",
+    "assets",
+    "preview",
+    "scripts/preview.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "license": "BSD-3-Clause",
+  "author": "FerrariLewis",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FerrariLewis/dsh-.git"
+  },
+  "homepage": "https://github.com/FerrariLewis/dsh-#readme",
+  "bugs": {
+    "url": "https://github.com/FerrariLewis/dsh-/issues"
+  },
+  "keywords": [
+    "dsh-openup-lewis",
+    "dsh-open-beauty",
+    "open-beauty",
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "boot-animation",
+    "splash",
+    "startup",
+    "settings",
+    "video"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@playwright/test": "^1.56.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    },
+    "engines": {
+      "dsh": ">=0.2.1-rc.2 <0.3.0"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/preview.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "playwright test",
+    "check": "npm run build && npm test && npm run test:browser"
+  }
+}

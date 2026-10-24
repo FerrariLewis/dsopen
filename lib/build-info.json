@@ -1,0 +1,8 @@
+{
+  "version": "1.2.1",
+  "format": "DSH ModuleLoader CJS + Node ESM",
+  "source": [
+    "src/client.jsx",
+    "src/host.js"
+  ]
+}
