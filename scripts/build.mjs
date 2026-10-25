@@ -4,10 +4,11 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
+const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 await mkdir(join(root, 'lib'), { recursive: true })
 await copyFile(join(root, 'src/host.js'), join(root, 'lib/index.js'))
 await copyFile(join(root, 'src/updates.js'), join(root, 'lib/updates.js'))
-const common = { bundle: true, sourcemap: false, legalComments: 'eof', target: ['chrome110'], define: { 'process.env.NODE_ENV': '"production"' } }
+const common = { bundle: true, sourcemap: false, legalComments: 'eof', target: ['chrome110'], define: { 'process.env.NODE_ENV': '"production"', '__DSH_LEWIS_VERSION__': JSON.stringify(pkg.version) } }
 await build({
   ...common,
   entryPoints: [join(root, 'src/client.jsx')],
@@ -16,6 +17,5 @@ await build({
   banner: { js: 'window.__ModuleLoader__.load({ id: "dsh-boot-studio", factory: (require) => { var module = { exports: {} }; var exports = module.exports;' },
   footer: { js: 'return module.exports; } });' },
 })
-const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 await writeFile(join(root, 'lib/build-info.json'), JSON.stringify({ version: pkg.version, format: 'DSH ModuleLoader CJS + Node ESM', source: ['src/client.jsx', 'src/host.js'] }, null, 2) + '\n')
 console.log(`Built dsh-boot-studio ${pkg.version}: host and DSH client.`)

@@ -3,14 +3,20 @@ import { CSS } from './styles.js';
 import { WHALE_PATH } from './logo-path.js';
 import { StartupSequence } from './startup-screen.jsx';
 import { UpdatePanel } from './update-panel.jsx';
+import { UpdatePrompt } from './update-prompt.jsx';
+import { startupUpdateSession, isAvailableUpdate } from './startup-update.js';
+import { acquireImmersive } from './immersive.js';
+import { getShortcutRegistry } from './shortcut-registry.js';
 
 const BASE = '/dsh-boot-studio';
 const OPEN = 'dsh-boot-studio:open';
 const PLAY = 'dsh-boot-studio:play';
 let bootClaimed = false;
 let launchRequest = null;
+let launchDecisionSettled = false;
 let latestState = null;
 const subscribers = new Set();
+const VERSION = typeof __DSH_LEWIS_VERSION__ === 'string' ? __DSH_LEWIS_VERSION__ : '1.2.5';
 
 export async function api(path, options = {}) {
   const controller = new AbortController();
@@ -53,6 +59,7 @@ export function Player({ clip, settings, onClose, endOnly = false }) {
   useStyles();
   const video = useRef(null);
   const dialog = useRef(null);
+  const immersive = useRef(null);
   const closed = useRef(false);
   const [phase,setPhase]=useState(endOnly?'end':'intro');
   const phaseRef=useRef(endOnly?'end':'intro');
@@ -80,15 +87,17 @@ export function Player({ clip, settings, onClose, endOnly = false }) {
     closed.current = false;
     const playerDialog = dialog.current;
     const previous = document.activeElement;
+    const lease = acquireImmersive(document);
+    immersive.current = lease;
     if (typeof playerDialog.showModal === 'function' && !playerDialog.open) playerDialog.showModal();
     else playerDialog.setAttribute('open', '');
     const key = e => {
       e.preventDefault();e.stopPropagation();
-      if(!e.repeat&&!e.isComposing)advance();
+      if(!e.repeat&&!e.isComposing){void lease.retryFromGesture(e);advance();}
     };
     window.addEventListener('keydown', key, true);
     playerDialog.focus();
-    return () => { closed.current=true;window.removeEventListener('keydown',key,true);if(playerDialog.open&&typeof playerDialog.close==='function')playerDialog.close();if(previous?.isConnected)previous.focus?.(); };
+    return () => { closed.current=true;immersive.current=null;void lease.release();window.removeEventListener('keydown',key,true);if(playerDialog.open&&typeof playerDialog.close==='function')playerDialog.close();if(previous?.isConnected)previous.focus?.(); };
   }, [advance]);
   useEffect(()=>{
     if(phase!=='intro')return;
@@ -133,7 +142,7 @@ export function Player({ clip, settings, onClose, endOnly = false }) {
   };
   const playManually = async e => { e.stopPropagation(); try { await video.current.play(); setBlocked(false); } catch { showEnd(); } };
   return <dialog ref={dialog} className="bs-player" data-testid="player" data-phase={phase} aria-label={phase==='end'?'DeepSeek 标题界面':`开机动画：${clip.name}`} tabIndex={-1}
-    onCancel={e=>{e.preventDefault();advance();}} onPointerDown={e=>{if(!e.target.closest('[data-bs-control]'))advance();}}>
+    onCancel={e=>{e.preventDefault();advance();}} onPointerDown={e=>{if(!e.target.closest('[data-bs-control]')){void immersive.current?.retryFromGesture(e.nativeEvent);advance();}}}>
     {phase==='end'?<EndTitle settings={settings}/>:<>
       {clip.kind==='sequence'?<StartupSequence sound={settings.sound} volume={settings.volume} onEnded={showEnd}/>:<video data-testid="boot-video" ref={video} src={clip.url} loop={false} playsInline preload="auto" style={{objectFit:settings.fit || 'cover'}}
         onPlaying={() => setBlocked(false)} onEnded={showEnd} onError={showEnd}/>}
@@ -157,6 +166,9 @@ export function SettingsPanel({ standalone = false }) {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [pendingImageDelete,setPendingImageDelete]=useState(null);
   const [draftVolume, setDraftVolume] = useState(70);
+  const [draftBlur,setDraftBlur] = useState(30);
+  const [draftRadius,setDraftRadius] = useState(30);
+  const [appearancePreview,setAppearancePreview] = useState(false);
   const input = useRef(null);
   const imageInput=useRef(null);
   const active = useRef(true);
@@ -164,7 +176,7 @@ export function SettingsPanel({ standalone = false }) {
   const probeCancel=useRef(null);
   useEffect(() => {
     active.current = true;
-    const update = v => { setState(v);setDraftVolume(Math.round(v.settings.volume*100)); };
+    const update = v => { setState(v);setDraftVolume(Math.round(v.settings.volume*100));setDraftBlur(v.settings.updatePromptBlur??30);setDraftRadius(v.settings.updatePromptRadius??30); };
     subscribers.add(update);
     api('/state').then(publish).catch(e => setError(`连接失败：${e.message}。请重启 Harness 后重试。`));
     return () => { active.current=false; subscribers.delete(update);uploadRequest.current?.abort();probeCancel.current?.(); };
@@ -173,7 +185,7 @@ export function SettingsPanel({ standalone = false }) {
     if (busy) return;
     setBusy(true);setError('');setNotice('');
     try { publish(await api('/settings',{method:'POST',body:JSON.stringify(patch)}));setNotice('设置已保存，下次启动生效'); }
-    catch(e) {setError(e.message); if(state) setDraftVolume(Math.round(state.settings.volume*100));}
+    catch(e) {setError(e.message); if(state){setDraftVolume(Math.round(state.settings.volume*100));setDraftBlur(state.settings.updatePromptBlur??30);setDraftRadius(state.settings.updatePromptRadius??30);}}
     finally {if(active.current)setBusy(false);}
   }
   async function remove(clip) {
@@ -238,7 +250,7 @@ export function SettingsPanel({ standalone = false }) {
   const settings=state?.settings;
   const selected=state?.clips.find(c=>c.id===settings.selectedId) || state?.clips[0];
   return <section className="bs-studio" data-testid="settings">
-    <div className="bs-heading"><div><div className="bs-eyebrow">DSH OPEN BEAUTY</div><h1>开机动画<span>工作室</span></h1><p>原片完整播放，开启属于你的工作空间。</p></div><span className="bs-version">V1.2</span></div>
+    <div className="bs-heading"><div><div className="bs-eyebrow">DSH LEWIS ENCHANT</div><h1>附魔台<span>开机动画</span></h1><p>自定义你的开场，封面与声音。</p></div><span className="bs-version">V{VERSION}</span></div>
     <div className="bs-toolbar"><span className="bs-status"><i/>{settings ? settings.enabled ? '启动时自动播放' : '自动播放已关闭' : '正在连接…'}</span><button className="bs-primary" type="button" disabled={!selected || busy} onClick={()=>preview(selected,settings)}>▶ 预览当前动画</button></div>
     {error && <div className="bs-alert" role="alert">{error}<button type="button" onClick={()=>{setError('');api('/state').then(publish).catch(e=>setError(e.message));}}>重试</button></div>}
     <div className="bs-notice" role="status" aria-live="polite">{busy ? uploadPercent !== null ? `正在上传 ${uploadPercent}%` : notice || '正在保存…' : notice}</div>
@@ -275,6 +287,14 @@ export function SettingsPanel({ standalone = false }) {
       </div>
       <div className="bs-help"><strong>像游戏一样开启。</strong><p>动画中按任意键跳到标题页，再按任意键进入。也支持鼠标点击与触屏；长按不会连跳。视频和结束图片都保存在本机。</p><span>视频：dsh-boot-animation · BSD-3-Clause　技术档案：dsh-startup-screen · MIT</span></div>
       <UpdatePanel request={api} standalone={standalone}/>
+      <div className="bs-section-title"><h2>更新提醒外观</h2><button className="bs-text-button" type="button" onClick={()=>setAppearancePreview(true)}>预览更新提醒</button></div>
+      <div className="bs-preferences">
+        <label className="bs-field"><span>磨砂度<small>调整更新弹窗的背景模糊程度</small></span><input aria-label="更新弹窗磨砂度" type="range" min="0" max="48" step="1" value={draftBlur} disabled={busy} onChange={e=>setDraftBlur(Number(e.target.value))} onPointerUp={e=>save({updatePromptBlur:Number(e.currentTarget.value)})} onKeyUp={e=>{if(['ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(e.key))save({updatePromptBlur:Number(e.currentTarget.value)});}}/><output>{draftBlur}px</output></label>
+        <label className="bs-field"><span>弹窗圆角<small>调整更新弹窗边角的圆润程度</small></span><input aria-label="更新弹窗圆角" type="range" min="12" max="40" step="1" value={draftRadius} disabled={busy} onChange={e=>setDraftRadius(Number(e.target.value))} onPointerUp={e=>save({updatePromptRadius:Number(e.currentTarget.value)})} onKeyUp={e=>{if(['ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(e.key))save({updatePromptRadius:Number(e.currentTarget.value)});}}/><output>{draftRadius}px</output></label>
+      </div>
+      <div className="bs-section-title bs-entry-title"><h2>进入方式</h2></div>
+      <div className="bs-preferences"><Toggle label="显示侧栏快捷入口" description="在头像上方显示“开机动画”；关闭后仍可从设置进入。附魔台系列最多显示17个快捷入口。" checked={settings.showShortcut??false} disabled={busy} onChange={showShortcut=>save({showShortcut})}/></div>
+      {appearancePreview&&<UpdatePrompt request={api} status={{currentVersion:VERSION}} settings={{...settings,updatePromptBlur:draftBlur,updatePromptRadius:draftRadius}} preview onDismiss={()=>setAppearancePreview(false)}/>}
     </>}
     {!state&&!error&&<div className="bs-loading">正在加载片库…</div>}
   </section>;
@@ -285,6 +305,10 @@ export function BootRoot() {
   const [play,setPlay]=useState(null);
   const [opened,setOpened]=useState(false);
   const [message,setMessage]=useState('');
+  const [launchSettled,setLaunchSettled]=useState(launchDecisionSettled);
+  const [launchState,setLaunchState]=useState(latestState);
+  const [updateSnapshot,setUpdateSnapshot]=useState(()=>startupUpdateSession.getSnapshot());
+  const [offerUpdate,setOfferUpdate]=useState(false);
   const trigger=useCallback(value=>setPlay({...value,key:Date.now()}),[]);
   useEffect(()=>{
     const playEvent=e=>trigger(e.detail);
@@ -293,17 +317,60 @@ export function BootRoot() {
     return()=>{window.removeEventListener(PLAY,playEvent);window.removeEventListener(OPEN,open);};
   },[trigger]);
   useEffect(()=>{
-    if(bootClaimed)return;
+    const stateChanged=value=>setLaunchState(value);
+    subscribers.add(stateChanged);
+    const unsubscribe=startupUpdateSession.subscribe(setUpdateSnapshot);
+    setUpdateSnapshot(startupUpdateSession.getSnapshot());
+    void startupUpdateSession.check(api);
+    return()=>{subscribers.delete(stateChanged);unsubscribe();};
+  },[]);
+  useEffect(()=>{
+    if(bootClaimed){setLaunchSettled(true);return;}
     let alive=true;
     // Scope is the current document. A refreshed/reopened renderer replays; a
     // shell slot remount or a conversation change within that renderer does not.
     launchRequest ||= api('/launch');
-    launchRequest.then(value=>{if(!alive||bootClaimed)return;bootClaimed=true;publish(value);if(value.settings.enabled){const clip=value.clip || value.clips.find(c=>c.id===value.settings.selectedId)||value.clips[0];if(clip)trigger({clip,settings:value.settings});}}).catch(()=>{if(alive)bootClaimed=true;/* A cosmetic plugin never blocks the workspace. */});
+    launchRequest.then(value=>{if(!alive||bootClaimed)return;bootClaimed=true;launchDecisionSettled=true;publish(value);if(value.settings.enabled){const clip=value.clip || value.clips.find(c=>c.id===value.settings.selectedId)||value.clips[0];if(clip)trigger({clip,settings:value.settings});}setLaunchSettled(true);}).catch(()=>{if(alive){bootClaimed=true;launchDecisionSettled=true;setLaunchSettled(true);}/* A cosmetic plugin never blocks the workspace. */});
     return()=>{alive=false;};
   },[trigger]);
+  useEffect(()=>{
+    setOfferUpdate(false);
+    if(!launchSettled||play||opened||updateSnapshot.dismissed||!isAvailableUpdate(updateSnapshot.status))return;
+    let timer=null;
+    let alive=true;
+    const blocked=()=>Array.from(document.querySelectorAll('dialog[open],[role="dialog"][aria-modal="true"]')).some(element=>{
+      if(element.matches('.bs-startup-update:not([data-preview])'))return false;
+      return element.getClientRects().length>0&&getComputedStyle(element).visibility!=='hidden';
+    });
+    const schedule=()=>{
+      if(timer!==null){clearTimeout(timer);timer=null;}
+      if(!alive||blocked())return;
+      timer=setTimeout(()=>{timer=null;if(alive&&!blocked()){setOfferUpdate(true);observer?.disconnect();}},250);
+    };
+    const observer=typeof MutationObserver==='function'?new MutationObserver(schedule):null;
+    observer?.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['open','hidden','style','aria-hidden']});
+    schedule();
+    return()=>{alive=false;clearTimeout(timer);observer?.disconnect();};
+  },[launchSettled,play,opened,updateSnapshot]);
   const onClose=useCallback(reason=>{setPlay(null);if(['media-error','load-error','play-error','timeout'].includes(reason)){setMessage('动画未能播放，已为你进入 Harness。可在设置中更换视频。');setTimeout(()=>setMessage(''),6500);}},[]);
   useEffect(()=>{if(!opened)return;const key=e=>{if(e.key==='Escape'&&!play)setOpened(false);};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[opened,play]);
-  return <>{opened&&<div className="bs-modal" onClick={e=>{if(e.target===e.currentTarget)setOpened(false);}}><div role="dialog" aria-modal="true" aria-label="开机动画设置" className="bs-modal-body"><button type="button" className="bs-modal-close" onClick={()=>setOpened(false)}>关闭 ×</button><SettingsPanel/></div></div>}{play&&<Player key={play.key} clip={play.clip} settings={play.settings} endOnly={play.endOnly} onClose={onClose}/ >}{message&&<div className="bs-toast" role="status">{message}</div>}</>;
+  return <>{opened&&<div className="bs-modal" onClick={e=>{if(e.target===e.currentTarget)setOpened(false);}}><div role="dialog" aria-modal="true" aria-label="开机动画设置" className="bs-modal-body"><button type="button" className="bs-modal-close" onClick={()=>setOpened(false)}>关闭 ×</button><SettingsPanel/></div></div>}{play&&<Player key={play.key} clip={play.clip} settings={play.settings} endOnly={play.endOnly} onClose={onClose}/ >}{offerUpdate&&!play&&!opened&&!updateSnapshot.dismissed&&isAvailableUpdate(updateSnapshot.status)&&<UpdatePrompt request={api} status={updateSnapshot.status} settings={launchState?.settings} onDismiss={()=>startupUpdateSession.dismiss()} onUpdated={version=>startupUpdateSession.updated(version)}/ >}{message&&<div className="bs-toast" role="status">{message}</div>}</>;
+}
+
+export function ShortcutAction() {
+  const [state,setState]=useState(latestState);
+  const registry=getShortcutRegistry();
+  const [budget,setBudget]=useState(()=>registry.getSnapshot());
+  const enabled=state?.settings.showShortcut===true;
+  useEffect(()=>{
+    const changed=value=>setState(value);subscribers.add(changed);
+    if(latestState)setState(latestState);else api('/state').then(publish).catch(()=>{});
+    return()=>subscribers.delete(changed);
+  },[]);
+  useEffect(()=>registry.subscribe(()=>setBudget(registry.getSnapshot())),[registry]);
+  useEffect(()=>{if(!enabled)return;return registry.acquire('dsh-openup-lewis');},[enabled,registry]);
+  if(!enabled||!budget.visibleIds.includes('dsh-openup-lewis'))return null;
+  return <button type="button" title="开机动画" aria-label="开机动画" onClick={openSettings} style={{border:0,background:'transparent',color:'inherit',cursor:'pointer',padding:8}}>▷</button>;
 }
 
 export function apply(ctx) {
@@ -311,7 +378,7 @@ export function apply(ctx) {
     const register=()=>{
       ready.slots.inject('shell.overlay',()=>ready.slots.register({name:'shell.overlay',id:'dsh-boot-studio-overlay',order:950},()=>React.createElement(BootRoot)));
       ready.slots.inject('settings.section',()=>ready.slots.register({name:'settings.section',id:'dsh-boot-studio-settings',order:80,label:()=> '开机动画'},()=>React.createElement(SettingsPanel)));
-      ready.slots.inject('sidebar.footer.action',()=>ready.slots.register({name:'sidebar.footer.action',id:'dsh-boot-studio-shortcut',order:42,label:()=> '开机动画'},()=>React.createElement('button',{type:'button',title:'开机动画工作室','aria-label':'开机动画工作室',onClick:openSettings,style:{border:0,background:'transparent',color:'inherit',cursor:'pointer',padding:8}},'▷')));
+      ready.slots.inject('sidebar.footer.action',()=>ready.slots.register({name:'sidebar.footer.action',id:'dsh-boot-studio-shortcut',order:42,label:()=> '开机动画'},()=>React.createElement(ShortcutAction)));
     };
     if(typeof ready.effect==='function')ready.effect(register,'dsh-boot-studio: slots');else register();
   };

@@ -128,16 +128,17 @@ export async function main(argv = process.argv.slice(2)) {
     if (args['existing-npm']) assertExistingRelease(npmUpdate, JSON.parse(await readFile(resolve(args['existing-npm']), 'utf8')));
   }
   // Product display name is independent of the stable internal package id.
-  index.title = { en: 'DSH Open Beauty', zh: 'Open Beauty 开场美学' };
-  index.description = { en: 'Stable Open Beauty releases for DeepSeek Harness.', zh: 'Open Beauty 的稳定版本与更新目录。' };
-  index.plugins[0].title = { en: 'DSH Open Beauty', zh: 'Open Beauty 开场美学' };
+  index.title = { en: 'DSH LEWIS ENCHANT', zh: '附魔台 · 开机动画' };
+  index.description = { en: 'Stable startup animation releases for DeepSeek Harness.', zh: '附魔台开机动画的稳定版本与更新目录。' };
+  index.plugins[0].title = { en: 'DSH LEWIS ENCHANT', zh: '附魔台 · 开机动画' };
   const out = resolve(args.out || join(ROOT, 'release-assets'));
   await mkdir(out, { recursive: true });
   await writeFile(join(out, 'update.json'), JSON.stringify(update, null, 2) + '\n');
   if (npmUpdate) await writeFile(join(out, 'npm-update.json'), JSON.stringify(npmUpdate, null, 2) + '\n');
   await writeFile(join(out, 'plugin-index.json'), JSON.stringify(index, null, 2) + '\n');
   await writeFile(join(out, 'SHA256SUMS.txt'), `${artifact.sha256}  ${artifact.manifest.name.replace('/', '-')}-${artifact.manifest.version}.tgz\n` + (npmArtifact ? `${npmArtifact.sha256}  ${NPM_ENTRY_NAME}-${npmArtifact.manifest.version}.tgz\n${npmArtifact.sha256}  ${NPM_ENTRY_NAME}.tgz\n` : ''));
-  await writeFile(join(out, 'release-notes.md'), `DSH Open Beauty ${update.version}\n\n源码提交：${update.sourceCommit}\n构建提交：${update.commit}\n\n使用插件设置中的检查更新进行原位升级，无需先卸载。升级后重新打开 Harness。个人视频、图片和播放偏好保留。\n\nSHA-256：${update.sha256}\n`);
+  const highlights = update.version === '1.2.5' ? '本版本新增启动时检查更新与雾光磨砂提醒，支持自定义弹窗磨砂度和圆角。开场通过真正全屏隐藏原生窗口标题栏，进入应用后还原原窗口状态。侧栏快捷入口默认隐藏，可在设置中开启。原有开场视频、封面图片与文字保留。\n\n' : '';
+  await writeFile(join(out, 'release-notes.md'), `DSH LEWIS ENCHANT · 附魔台｜开机动画 ${update.version}\n\n${highlights}使用插件设置中的检查更新进行原位升级，无需先卸载。升级后重新打开 Harness。个人视频、图片和播放偏好保留。\n\n源码提交：${update.sourceCommit}\n构建提交：${update.commit}\nSHA-256：${update.sha256}\n`);
   console.log(`Release metadata verified: ${update.packageName}@${update.version}\nDistribution commit: ${update.commit}\nImmutable tarball: ${update.tarballUrl}\nOutput: ${out}`);
 }
 

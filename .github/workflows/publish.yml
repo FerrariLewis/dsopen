@@ -1,4 +1,4 @@
-name: Publish Open Beauty
+name: Build and release LEWIS ENCHANT
 
 on:
   workflow_dispatch:
@@ -100,7 +100,7 @@ jobs:
             tar -xzf "$TARBALL" -C "$EXTRACT"
             cp -a "$EXTRACT/package/." "$DIST/"
             git -C "$DIST" add -A
-            git -C "$DIST" -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit --allow-empty -m "Release Open Beauty $VERSION"
+            git -C "$DIST" -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit --allow-empty -m "Release LEWIS ENCHANT $VERSION"
             DIST_SHA=$(git -C "$DIST" rev-parse HEAD)
             git -C "$DIST" push origin HEAD:refs/heads/release-bundles
             node scripts/release.mjs --tarball "$TARBALL" --npm-tarball "$NPM_TARBALL" --repo "$GITHUB_REPOSITORY" --commit "$DIST_SHA" --source-commit "$GITHUB_SHA" --time "$PUBLISH_TIME" --out release-assets
@@ -121,15 +121,15 @@ jobs:
           DIST_SHA: ${{ steps.distribution.outputs.commit }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" "release-assets/$TARBALL" "release-assets/$NPM_TARBALL" release-assets/dsh-openup-lewis.tgz release-assets/update.json release-assets/npm-update.json release-assets/plugin-index.json release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title "DSH Open Beauty $VERSION" --notes-file release-assets/release-notes.md --latest
+          gh release create "v$VERSION" "release-assets/$TARBALL" "release-assets/$NPM_TARBALL" release-assets/dsh-openup-lewis.tgz release-assets/update.json release-assets/npm-update.json release-assets/plugin-index.json release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title "DSH LEWIS ENCHANT · 开机动画 $VERSION" --notes-file release-assets/release-notes.md --latest
       - name: Advance the stable channel
         shell: bash
         env:
           DIST_SHA: ${{ steps.distribution.outputs.commit }}
         run: |
           set -euo pipefail
-          printf '%s\n' 'Open Beauty stable update channel.' 'Versioned tarballs are immutable; these JSON files point to the latest verified version.' > "$RUNNER_TEMP/stable-notes.md"
+          printf '%s\n' 'DSH LEWIS ENCHANT stable update channel.' 'Versioned tarballs are immutable; these JSON files point to the latest verified version.' > "$RUNNER_TEMP/stable-notes.md"
           if ! gh release view channel-stable --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create channel-stable --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title 'Open Beauty stable channel' --notes-file "$RUNNER_TEMP/stable-notes.md" --prerelease
+            gh release create channel-stable --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title 'DSH LEWIS ENCHANT stable channel' --notes-file "$RUNNER_TEMP/stable-notes.md" --prerelease
           fi
           gh release upload channel-stable release-assets/update.json release-assets/npm-update.json release-assets/plugin-index.json --repo "$GITHUB_REPOSITORY" --clobber

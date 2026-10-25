@@ -2,13 +2,8 @@ name: Stage npm update for approval
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, master]
-    paths:
-      - '.github/workflows/publish-npm.yml'
-      - 'scripts/publish-npm-entry.mjs'
   workflow_run:
-    workflows: ['Publish Open Beauty']
+    workflows: ['Build and release LEWIS ENCHANT']
     branches: [main, master]
     types: [completed]
 

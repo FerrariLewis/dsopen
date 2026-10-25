@@ -46,4 +46,37 @@ export const CSS = `
 @media(max-width:850px){.bs-studio{padding:26px 24px}.bs-library{grid-template-columns:repeat(2,minmax(0,1fr))}.bs-heading h1{font-size:26px}.bs-modal{padding:14px}.bs-modal-close{right:20px;top:20px}}
 @media(max-width:520px){.bs-studio{padding:24px 16px;border-radius:10px}.bs-heading h1{font-size:23px}.bs-heading h1 span{margin-left:7px}.bs-eyebrow{font-size:8px}.bs-heading p{font-size:11px}.bs-toolbar{align-items:flex-start;flex-direction:column;margin-top:20px;gap:12px}.bs-library{gap:9px}.bs-clip-info{padding:9px 8px 6px;display:block}.bs-clip-info h3{font-size:11px}.bs-clip-info>span{font-size:9px}.bs-clip-actions{padding:0 8px 9px}.bs-clip-actions button{font-size:10px}.bs-upload{min-height:165px;padding:10px}.bs-upload small{font-size:9px}.bs-section-title>span{font-size:9px}.bs-toggle-row,.bs-field{padding:13px 12px;gap:10px}.bs-toggle-row small,.bs-field small{font-size:10px}.bs-toggle-row input{right:12px}.bs-player-top{padding:16px}.bs-player-top>span{font-size:8px;letter-spacing:1px}.bs-player-top b{display:none}.bs-player-top button{font-size:11px;padding:7px 9px}.bs-player-bottom{padding:18px 16px;font-size:10px}.bs-sound{right:16px;bottom:60px}.bs-modal{padding:7px}.bs-modal-close{right:13px;top:17px;font-size:10px}.bs-modal-body .bs-heading h1{font-size:21px}}
 @media(prefers-reduced-motion:reduce){.bs-player,.bs-studio *,.bs-player *{animation:none!important;transition:none!important}}
+/* The native titlebar disappears through the Fullscreen API; this only removes
+   Harness's optional HTML menu while the Player owns its immersive lease. */
+html[data-lewis-immersive="true"] [data-windows-menu]{visibility:hidden!important;pointer-events:none!important}
+.bs-entry-title{margin-top:26px}
+.bs-startup-update{--bs-update-radius:30px;--bs-update-blur:30px;box-sizing:border-box;width:min(448px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 40px);margin:auto;padding:0;border:0;overflow:auto;background:transparent;color:#eaf3ef;outline:none;font:13px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;color-scheme:dark}
+.bs-startup-update::backdrop{background:#030d1270;backdrop-filter:blur(calc(var(--bs-update-blur) * .23));-webkit-backdrop-filter:blur(calc(var(--bs-update-blur) * .23))}
+.bs-startup-update *{box-sizing:border-box}
+.bs-startup-update-card{position:relative;width:100%;padding:31px;border:1px solid #ddffff30;border-radius:var(--bs-update-radius);background:linear-gradient(135deg,#b6f7ef13,transparent 62%),#162b31c9;backdrop-filter:blur(var(--bs-update-blur)) saturate(125%);-webkit-backdrop-filter:blur(var(--bs-update-blur)) saturate(125%);box-shadow:0 32px 90px #0006,inset 0 1px 0 #ffffff15;overflow:hidden}
+.bs-startup-update button{font:inherit;cursor:pointer;transition:background .18s,filter .18s}
+.bs-startup-update button:focus-visible{outline:2px solid #b6eddd;outline-offset:3px}
+.bs-startup-update button:disabled{cursor:default;opacity:.6}
+.bs-startup-update-close{position:absolute;right:17px;top:17px;border:0;border-radius:50%;background:#ffffff0c;color:#9aafb0;width:31px;height:31px;display:grid;place-items:center;font-size:20px!important;line-height:1}
+.bs-startup-update-glyph{width:55px;height:55px;border-radius:18px;display:grid;place-items:center;font-size:30px;line-height:1;color:#b6eddd;background:linear-gradient(145deg,#8adcc51f,#89c4d10b);border:1px solid #c2f9e721;margin-bottom:25px}
+.bs-startup-update-brand{font-size:9px;letter-spacing:.17em;margin:0 0 10px;color:#b6eddd;overflow-wrap:anywhere}
+.bs-startup-update-brand span{display:block;letter-spacing:0;margin-top:7px;color:#9aafb0;font-size:11px}
+.bs-startup-update h2{font-size:25px;line-height:1.35;font-weight:500;letter-spacing:-.02em;margin:0 0 12px;color:#eaf3ef}
+.bs-startup-update-copy{font-size:12px;color:#9aafb0;line-height:1.85;margin:0}
+.bs-startup-update-versions{display:flex;align-items:center;gap:12px;font-size:12px;margin:21px 0 19px;color:#9aafb0;flex-wrap:wrap}
+.bs-startup-update-versions strong{font-weight:500;color:#b6eddd;background:#b2e8da12;border-radius:8px;padding:6px 10px}
+.bs-startup-update-summary{padding:16px 17px;border-radius:15px;border:1px solid #cbf1e51a;background:#051b202e;margin-bottom:18px}
+.bs-startup-update-summary p{font-size:12px;line-height:1.7;margin:0;color:#eaf3ef;display:flex;gap:10px}
+.bs-startup-update-summary p:before{content:'✓';color:#b6eddd;flex:none}
+.bs-startup-update-summary p+p{margin-top:8px}
+.bs-startup-update-retain{font-size:11px;line-height:1.6;color:#9aafb0;margin:0 0 23px}
+.bs-startup-update-retain:before{content:'◇';margin-right:7px;color:#b6eddd}
+.bs-startup-update-status{font-size:12px;line-height:1.8;color:#b6eddd;margin:0 0 19px}
+.bs-startup-update-error{font-size:12px;line-height:1.8;color:#ffd4c9;margin:0 0 19px;overflow-wrap:anywhere}
+.bs-startup-update-actions{display:flex;gap:10px}
+.bs-startup-update-actions button{min-width:0;min-height:43px;font-size:12px;line-height:1.5;border-radius:13px;padding:10px 16px;border:1px solid #cbf1e51a;background:#ffffff07;color:#9aafb0;flex:1}
+.bs-startup-update-actions .bs-startup-update-primary{flex:1.55;border-color:transparent;color:#142c2c;background:#b6eddd;box-shadow:0 5px 16px #95e3cd10}
+.bs-startup-update-actions button:hover:not(:disabled){filter:brightness(1.08)}
+@media(max-width:450px){.bs-startup-update-card{padding:27px 23px}.bs-startup-update h2{font-size:23px}.bs-startup-update-actions button{padding:10px 12px}.bs-startup-update-versions{gap:9px}}
+@media(prefers-reduced-motion:reduce){.bs-startup-update *{transition:none!important;animation:none!important}}
 `;
