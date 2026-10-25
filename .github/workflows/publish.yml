@@ -11,6 +11,7 @@ on:
       - 'pnpm-lock.yaml'
       - 'scripts/build.mjs'
       - 'scripts/release.mjs'
+      - 'scripts/verify-unpublished-revision.mjs'
       - 'scripts/build-npm-entry.mjs'
       - '.github/workflows/publish.yml'
 
@@ -65,8 +66,26 @@ jobs:
           TARBALL="$PACKAGE_NAME-$VERSION.tgz"
           NPM_TARBALL="dsh-openup-lewis-$VERSION.tgz"
           PUBLISH_TIME=$(git show -s --format=%cI "$GITHUB_SHA")
-          node scripts/release.mjs --tarball "$TARBALL" --npm-tarball "$NPM_TARBALL" --repo "$GITHUB_REPOSITORY" --commit "$GITHUB_SHA" --source-commit "$GITHUB_SHA" --time "$PUBLISH_TIME" --out "$RUNNER_TEMP/preflight"
-          printf 'version=%s\ntarball=%s\nnpm_tarball=%s\ntime=%s\n' "$VERSION" "$TARBALL" "$NPM_TARBALL" "$PUBLISH_TIME" >> "$GITHUB_OUTPUT"
+          REVISION=none
+          PREVIOUS_TAG_SHA=
+          PREVIOUS_ARGS=()
+          # Only the owner's explicitly revised, unapproved 1.2.5 can take this
+          # path. The verifier pins the old source, package hashes and tag, and
+          # refuses it once npm has published this version.
+          if [ "$VERSION" = '1.2.5' ] && gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            EXISTING="$RUNNER_TEMP/revision-existing"
+            mkdir -p "$EXISTING/channel"
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$VERSION" > "$EXISTING/release.json"
+            gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern update.json --pattern npm-update.json --dir "$EXISTING"
+            gh release download channel-stable --repo "$GITHUB_REPOSITORY" --pattern update.json --dir "$EXISTING/channel"
+            TAG_SHA=$(git ls-remote --exit-code origin "refs/tags/v$VERSION" | cut -f1)
+            node scripts/verify-unpublished-revision.mjs --repo "$GITHUB_REPOSITORY" --version "$VERSION" --source-commit "$GITHUB_SHA" --time "$PUBLISH_TIME" --release-json "$EXISTING/release.json" --core-metadata "$EXISTING/update.json" --npm-metadata "$EXISTING/npm-update.json" --channel-metadata "$EXISTING/channel/update.json" --tag-sha "$TAG_SHA" --core-tarball "$TARBALL" --npm-tarball "$NPM_TARBALL" --out "$RUNNER_TEMP/unpublished-revision.json"
+            REVISION=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).mode" "$RUNNER_TEMP/unpublished-revision.json")
+            PREVIOUS_TAG_SHA=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).previousTagSHA" "$RUNNER_TEMP/unpublished-revision.json")
+            PREVIOUS_ARGS=(--previous none)
+          fi
+          node scripts/release.mjs --tarball "$TARBALL" --npm-tarball "$NPM_TARBALL" --repo "$GITHUB_REPOSITORY" --commit "$GITHUB_SHA" --source-commit "$GITHUB_SHA" --time "$PUBLISH_TIME" "${PREVIOUS_ARGS[@]}" --out "$RUNNER_TEMP/preflight"
+          printf 'version=%s\ntarball=%s\nnpm_tarball=%s\ntime=%s\nrevision=%s\nprevious_tag_sha=%s\n' "$VERSION" "$TARBALL" "$NPM_TARBALL" "$PUBLISH_TIME" "$REVISION" "$PREVIOUS_TAG_SHA" >> "$GITHUB_OUTPUT"
       - name: Prepare immutable distribution commit and metadata
         id: distribution
         shell: bash
@@ -75,14 +94,17 @@ jobs:
           TARBALL: ${{ steps.release.outputs.tarball }}
           NPM_TARBALL: ${{ steps.release.outputs.npm_tarball }}
           PUBLISH_TIME: ${{ steps.release.outputs.time }}
+          REVISION: ${{ steps.release.outputs.revision }}
         run: |
           set -euo pipefail
           mkdir -p release-assets
           TAG="v$VERSION"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          PREVIOUS_ARGS=()
+          if [ "$REVISION" != 'none' ]; then PREVIOUS_ARGS=(--previous none); fi
+          if [ "$REVISION" != 'replace' ] && gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             mkdir -p "$RUNNER_TEMP/existing-release"
             gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern update.json --pattern npm-update.json --dir "$RUNNER_TEMP/existing-release"
-            node scripts/release.mjs --tarball "$TARBALL" --npm-tarball "$NPM_TARBALL" --repo "$GITHUB_REPOSITORY" --source-commit "$GITHUB_SHA" --time "$PUBLISH_TIME" --existing "$RUNNER_TEMP/existing-release/update.json" --existing-npm "$RUNNER_TEMP/existing-release/npm-update.json" --out release-assets
+            node scripts/release.mjs --tarball "$TARBALL" --npm-tarball "$NPM_TARBALL" --repo "$GITHUB_REPOSITORY" --source-commit "$GITHUB_SHA" --time "$PUBLISH_TIME" "${PREVIOUS_ARGS[@]}" --existing "$RUNNER_TEMP/existing-release/update.json" --existing-npm "$RUNNER_TEMP/existing-release/npm-update.json" --out release-assets
             echo 'existing=true' >> "$GITHUB_OUTPUT"
           else
             DIST="$RUNNER_TEMP/open-beauty-distribution"
@@ -103,7 +125,7 @@ jobs:
             git -C "$DIST" -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit --allow-empty -m "Release LEWIS ENCHANT $VERSION"
             DIST_SHA=$(git -C "$DIST" rev-parse HEAD)
             git -C "$DIST" push origin HEAD:refs/heads/release-bundles
-            node scripts/release.mjs --tarball "$TARBALL" --npm-tarball "$NPM_TARBALL" --repo "$GITHUB_REPOSITORY" --commit "$DIST_SHA" --source-commit "$GITHUB_SHA" --time "$PUBLISH_TIME" --out release-assets
+            node scripts/release.mjs --tarball "$TARBALL" --npm-tarball "$NPM_TARBALL" --repo "$GITHUB_REPOSITORY" --commit "$DIST_SHA" --source-commit "$GITHUB_SHA" --time "$PUBLISH_TIME" "${PREVIOUS_ARGS[@]}" --out release-assets
             echo 'existing=false' >> "$GITHUB_OUTPUT"
           fi
           DIST_SHA=$(node -p "JSON.parse(require('fs').readFileSync('release-assets/update.json','utf8')).commit")
@@ -111,17 +133,37 @@ jobs:
           cp "$TARBALL" release-assets/
           cp "$NPM_TARBALL" release-assets/
           cp "$NPM_TARBALL" release-assets/dsh-openup-lewis.tgz
-      - name: Publish immutable version
-        if: steps.distribution.outputs.existing != 'true'
+      - name: Publish version or finish the verified unpublished revision
+        if: steps.distribution.outputs.existing != 'true' || steps.release.outputs.revision == 'replay'
         shell: bash
         env:
           VERSION: ${{ steps.release.outputs.version }}
           TARBALL: ${{ steps.release.outputs.tarball }}
           NPM_TARBALL: ${{ steps.release.outputs.npm_tarball }}
           DIST_SHA: ${{ steps.distribution.outputs.commit }}
+          REVISION: ${{ steps.release.outputs.revision }}
+          PREVIOUS_TAG_SHA: ${{ steps.release.outputs.previous_tag_sha }}
+          PUBLISH_TIME: ${{ steps.release.outputs.time }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" "release-assets/$TARBALL" "release-assets/$NPM_TARBALL" release-assets/dsh-openup-lewis.tgz release-assets/update.json release-assets/npm-update.json release-assets/plugin-index.json release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title "DSH LEWIS ENCHANT · 开机动画 $VERSION" --notes-file release-assets/release-notes.md --latest
+          if [ "$REVISION" = 'none' ]; then
+            gh release create "v$VERSION" "release-assets/$TARBALL" "release-assets/$NPM_TARBALL" release-assets/dsh-openup-lewis.tgz release-assets/update.json release-assets/npm-update.json release-assets/plugin-index.json release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title "DSH LEWIS ENCHANT · 开机动画 $VERSION" --notes-file release-assets/release-notes.md --latest
+          else
+            # Re-read the release and npm immediately before replacing anything.
+            CURRENT="$RUNNER_TEMP/revision-before-write"
+            mkdir -p "$CURRENT/channel"
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$VERSION" > "$CURRENT/release.json"
+            gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern update.json --pattern npm-update.json --dir "$CURRENT"
+            gh release download channel-stable --repo "$GITHUB_REPOSITORY" --pattern update.json --dir "$CURRENT/channel"
+            TAG_SHA=$(git ls-remote --exit-code origin "refs/tags/v$VERSION" | cut -f1)
+            test "$TAG_SHA" = "$PREVIOUS_TAG_SHA"
+            node scripts/verify-unpublished-revision.mjs --repo "$GITHUB_REPOSITORY" --version "$VERSION" --source-commit "$GITHUB_SHA" --time "$PUBLISH_TIME" --release-json "$CURRENT/release.json" --core-metadata "$CURRENT/update.json" --npm-metadata "$CURRENT/npm-update.json" --channel-metadata "$CURRENT/channel/update.json" --tag-sha "$TAG_SHA" --core-tarball "$TARBALL" --npm-tarball "$NPM_TARBALL" --out "$RUNNER_TEMP/revision-before-write.json"
+            gh release upload "v$VERSION" "release-assets/$TARBALL" "release-assets/$NPM_TARBALL" release-assets/dsh-openup-lewis.tgz release-assets/update.json release-assets/npm-update.json release-assets/plugin-index.json release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
+            node --input-type=module -e "import {assertNpmUnpublished} from './scripts/verify-unpublished-revision.mjs'; await assertNpmUnpublished({repo:process.env.GITHUB_REPOSITORY,version:process.env.VERSION});"
+            git tag --force "v$VERSION" "$DIST_SHA"
+            git push origin "refs/tags/v$VERSION:refs/tags/v$VERSION" "--force-with-lease=refs/tags/v$VERSION:$PREVIOUS_TAG_SHA"
+            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --title "DSH LEWIS ENCHANT · 开机动画 $VERSION" --notes-file release-assets/release-notes.md --latest
+          fi
       - name: Advance the stable channel
         shell: bash
         env:

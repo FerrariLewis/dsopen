@@ -7,6 +7,7 @@ import { UpdatePrompt } from './update-prompt.jsx';
 import { startupUpdateSession, isAvailableUpdate } from './startup-update.js';
 import { acquireImmersive } from './immersive.js';
 import { getShortcutRegistry } from './shortcut-registry.js';
+import { ResetDialog } from './reset-dialog.jsx';
 
 const BASE = '/dsh-boot-studio';
 const OPEN = 'dsh-boot-studio:open';
@@ -20,7 +21,7 @@ const VERSION = typeof __DSH_LEWIS_VERSION__ === 'string' ? __DSH_LEWIS_VERSION_
 
 export async function api(path, options = {}) {
   const controller = new AbortController();
-  const timeout=['/upload','/end-images','/updates/prepare'].includes(path)?180000:path==='/updates/check'?20000:7000;
+  const timeout=['/upload','/end-images','/updates/prepare','/reset'].includes(path)?180000:path==='/updates/check'?20000:7000;
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
     const response = await fetch(BASE + path, { ...options, signal: controller.signal,
@@ -169,6 +170,7 @@ export function SettingsPanel({ standalone = false }) {
   const [draftBlur,setDraftBlur] = useState(30);
   const [draftRadius,setDraftRadius] = useState(30);
   const [appearancePreview,setAppearancePreview] = useState(false);
+  const [resetOpened,setResetOpened] = useState(false);
   const input = useRef(null);
   const imageInput=useRef(null);
   const active = useRef(true);
@@ -187,6 +189,19 @@ export function SettingsPanel({ standalone = false }) {
     try { publish(await api('/settings',{method:'POST',body:JSON.stringify(patch)}));setNotice('设置已保存，下次启动生效'); }
     catch(e) {setError(e.message); if(state){setDraftVolume(Math.round(state.settings.volume*100));setDraftBlur(state.settings.updatePromptBlur??30);setDraftRadius(state.settings.updatePromptRadius??30);}}
     finally {if(active.current)setBusy(false);}
+  }
+  async function restoreDefaults() {
+    if(busy)throw Error('请等待当前操作完成后再恢复默认。');
+    setBusy(true);setError('');setNotice('');
+    try{
+      publish(await api('/reset',{method:'POST',body:JSON.stringify({confirm:'reset-all-custom-data'})}));
+      setNotice('已恢复默认，全部上传的视频和图片已删除。');
+    }catch(error){
+      // Cleanup can report a disk error after preferences were safely reset.
+      // Refresh the visible state without hiding that error or claiming success.
+      await api('/state').then(publish).catch(()=>{});
+      throw error;
+    }finally{if(active.current)setBusy(false);}
   }
   async function remove(clip) {
     setBusy(true);setError('');
@@ -295,6 +310,8 @@ export function SettingsPanel({ standalone = false }) {
       <div className="bs-section-title bs-entry-title"><h2>进入方式</h2></div>
       <div className="bs-preferences"><Toggle label="显示侧栏快捷入口" description="在头像上方显示“开机动画”；关闭后仍可从设置进入。附魔台系列最多显示17个快捷入口。" checked={settings.showShortcut??false} disabled={busy} onChange={showShortcut=>save({showShortcut})}/></div>
       {appearancePreview&&<UpdatePrompt request={api} status={{currentVersion:VERSION}} settings={{...settings,updatePromptBlur:draftBlur,updatePromptRadius:draftRadius}} preview onDismiss={()=>setAppearancePreview(false)}/>}
+      <div className="bs-reset-area"><div><strong>恢复默认</strong><p>重置所有设置，永久删除全部上传的视频和图片，仅保留内置素材。</p></div><button className="bs-reset-open" type="button" disabled={busy} onClick={()=>setResetOpened(true)}>恢复默认</button></div>
+      {resetOpened&&<ResetDialog settings={settings} onCancel={()=>setResetOpened(false)} onConfirm={restoreDefaults}/>}
     </>}
     {!state&&!error&&<div className="bs-loading">正在加载片库…</div>}
   </section>;
@@ -339,7 +356,7 @@ export function BootRoot() {
     let timer=null;
     let alive=true;
     const blocked=()=>Array.from(document.querySelectorAll('dialog[open],[role="dialog"][aria-modal="true"]')).some(element=>{
-      if(element.matches('.bs-startup-update:not([data-preview])'))return false;
+      if(element.matches('[data-testid="startup-update"]:not([data-preview])'))return false;
       return element.getClientRects().length>0&&getComputedStyle(element).visibility!=='hidden';
     });
     const schedule=()=>{
@@ -353,7 +370,7 @@ export function BootRoot() {
     return()=>{alive=false;clearTimeout(timer);observer?.disconnect();};
   },[launchSettled,play,opened,updateSnapshot]);
   const onClose=useCallback(reason=>{setPlay(null);if(['media-error','load-error','play-error','timeout'].includes(reason)){setMessage('动画未能播放，已为你进入 Harness。可在设置中更换视频。');setTimeout(()=>setMessage(''),6500);}},[]);
-  useEffect(()=>{if(!opened)return;const key=e=>{if(e.key==='Escape'&&!play)setOpened(false);};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[opened,play]);
+  useEffect(()=>{if(!opened)return;const key=e=>{if(e.key==='Escape'&&!play&&!document.querySelector('dialog[open]'))setOpened(false);};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[opened,play]);
   return <>{opened&&<div className="bs-modal" onClick={e=>{if(e.target===e.currentTarget)setOpened(false);}}><div role="dialog" aria-modal="true" aria-label="开机动画设置" className="bs-modal-body"><button type="button" className="bs-modal-close" onClick={()=>setOpened(false)}>关闭 ×</button><SettingsPanel/></div></div>}{play&&<Player key={play.key} clip={play.clip} settings={play.settings} endOnly={play.endOnly} onClose={onClose}/ >}{offerUpdate&&!play&&!opened&&!updateSnapshot.dismissed&&isAvailableUpdate(updateSnapshot.status)&&<UpdatePrompt request={api} status={updateSnapshot.status} settings={launchState?.settings} onDismiss={()=>startupUpdateSession.dismiss()} onUpdated={version=>startupUpdateSession.updated(version)}/ >}{message&&<div className="bs-toast" role="status">{message}</div>}</>;
 }
 

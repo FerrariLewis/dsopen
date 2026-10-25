@@ -50,6 +50,11 @@ export const CSS = `
    Harness's optional HTML menu while the Player owns its immersive lease. */
 html[data-lewis-immersive="true"] [data-windows-menu]{visibility:hidden!important;pointer-events:none!important}
 .bs-entry-title{margin-top:26px}
+.bs-reset-area{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:30px;padding:24px 0 2px;border-top:1px solid var(--bs-line)}
+.bs-reset-area strong{font-size:12px;font-weight:500;color:#d4dfd9}
+.bs-reset-area p{font-size:11px;line-height:1.8;color:#8e9d9c;margin:5px 0 0;max-width:640px}
+.bs-reset-open{flex:none;color:#eab9b8;background:#e5a5a50b;border:1px solid #b77e7e55;border-radius:12px;padding:10px 17px;font-size:12px!important}
+.bs-reset-open:hover:not(:disabled){background:#e5a5a51c;border-color:#ca949477}
 .bs-startup-update{--bs-update-radius:30px;--bs-update-blur:30px;box-sizing:border-box;width:min(448px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 40px);margin:auto;padding:0;border:0;overflow:auto;background:transparent;color:#eaf3ef;outline:none;font:13px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;color-scheme:dark}
 .bs-startup-update::backdrop{background:#030d1270;backdrop-filter:blur(calc(var(--bs-update-blur) * .23));-webkit-backdrop-filter:blur(calc(var(--bs-update-blur) * .23))}
 .bs-startup-update *{box-sizing:border-box}
@@ -77,6 +82,12 @@ html[data-lewis-immersive="true"] [data-windows-menu]{visibility:hidden!importan
 .bs-startup-update-actions button{min-width:0;min-height:43px;font-size:12px;line-height:1.5;border-radius:13px;padding:10px 16px;border:1px solid #cbf1e51a;background:#ffffff07;color:#9aafb0;flex:1}
 .bs-startup-update-actions .bs-startup-update-primary{flex:1.55;border-color:transparent;color:#142c2c;background:#b6eddd;box-shadow:0 5px 16px #95e3cd10}
 .bs-startup-update-actions button:hover:not(:disabled){filter:brightness(1.08)}
+.bs-reset-glyph{color:#edc1be;background:linear-gradient(145deg,#d88f8f1f,#e4c5bd0a);border-color:#edc1be27}
+.bs-reset-summary{margin-top:20px}
+.bs-reset-summary p:before{content:'−';color:#e6b2ad}
+.bs-reset-warning{font-size:12px;line-height:1.8;color:#edb6af;margin:0 0 21px}
+.bs-reset-actions .bs-reset-confirm{flex:1.5;background:#e8b2ad;color:#382124;border-color:transparent;box-shadow:0 5px 16px #e8b2ad0b}
+@media(max-width:520px){.bs-reset-area{align-items:flex-start;flex-direction:column;gap:13px}.bs-reset-open{align-self:flex-start}}
 @media(max-width:450px){.bs-startup-update-card{padding:27px 23px}.bs-startup-update h2{font-size:23px}.bs-startup-update-actions button{padding:10px 12px}.bs-startup-update-versions{gap:9px}}
 @media(prefers-reduced-motion:reduce){.bs-startup-update *{transition:none!important;animation:none!important}}
 `;
