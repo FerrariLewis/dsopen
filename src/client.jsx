@@ -5,7 +5,6 @@ import { StartupSequence } from './startup-screen.jsx';
 import { UpdatePanel } from './update-panel.jsx';
 import { UpdatePrompt } from './update-prompt.jsx';
 import { startupUpdateSession, isAvailableUpdate } from './startup-update.js';
-import { acquireImmersive } from './immersive.js';
 import { getShortcutRegistry } from './shortcut-registry.js';
 import { ResetDialog } from './reset-dialog.jsx';
 
@@ -17,7 +16,25 @@ let launchRequest = null;
 let launchDecisionSettled = false;
 let latestState = null;
 const subscribers = new Set();
-const VERSION = typeof __DSH_LEWIS_VERSION__ === 'string' ? __DSH_LEWIS_VERSION__ : '1.2.5';
+const playerWindows = new WeakMap();
+const VERSION = typeof __DSH_LEWIS_VERSION__ === 'string' ? __DSH_LEWIS_VERSION__ : '1.2.6';
+
+// A marker for Harness's optional HTML menu only. Native caption buttons are
+// owned by the desktop host; this lease never changes the native window state.
+function acquirePlayerWindow(doc) {
+  const root=doc.documentElement;
+  let state=playerWindows.get(doc);
+  if(!state){state={count:0,previous:root.getAttribute('data-lewis-player')};playerWindows.set(doc,state);}
+  state.count++;
+  root.setAttribute('data-lewis-player','true');
+  let released=false;
+  return()=>{
+    if(released)return;released=true;
+    if(--state.count)return;
+    if(state.previous===null)root.removeAttribute('data-lewis-player');else root.setAttribute('data-lewis-player',state.previous);
+    playerWindows.delete(doc);
+  };
+}
 
 export async function api(path, options = {}) {
   const controller = new AbortController();
@@ -60,7 +77,6 @@ export function Player({ clip, settings, onClose, endOnly = false }) {
   useStyles();
   const video = useRef(null);
   const dialog = useRef(null);
-  const immersive = useRef(null);
   const closed = useRef(false);
   const [phase,setPhase]=useState(endOnly?'end':'intro');
   const phaseRef=useRef(endOnly?'end':'intro');
@@ -88,17 +104,16 @@ export function Player({ clip, settings, onClose, endOnly = false }) {
     closed.current = false;
     const playerDialog = dialog.current;
     const previous = document.activeElement;
-    const lease = acquireImmersive(document);
-    immersive.current = lease;
+    const releaseWindow=acquirePlayerWindow(document);
     if (typeof playerDialog.showModal === 'function' && !playerDialog.open) playerDialog.showModal();
     else playerDialog.setAttribute('open', '');
     const key = e => {
       e.preventDefault();e.stopPropagation();
-      if(!e.repeat&&!e.isComposing){void lease.retryFromGesture(e);advance();}
+      if(!e.repeat&&!e.isComposing)advance();
     };
     window.addEventListener('keydown', key, true);
     playerDialog.focus();
-    return () => { closed.current=true;immersive.current=null;void lease.release();window.removeEventListener('keydown',key,true);if(playerDialog.open&&typeof playerDialog.close==='function')playerDialog.close();if(previous?.isConnected)previous.focus?.(); };
+    return () => { closed.current=true;releaseWindow();window.removeEventListener('keydown',key,true);if(playerDialog.open&&typeof playerDialog.close==='function')playerDialog.close();if(previous?.isConnected)previous.focus?.(); };
   }, [advance]);
   useEffect(()=>{
     if(phase!=='intro')return;
@@ -143,9 +158,9 @@ export function Player({ clip, settings, onClose, endOnly = false }) {
   };
   const playManually = async e => { e.stopPropagation(); try { await video.current.play(); setBlocked(false); } catch { showEnd(); } };
   return <dialog ref={dialog} className="bs-player" data-testid="player" data-phase={phase} aria-label={phase==='end'?'DeepSeek 标题界面':`开机动画：${clip.name}`} tabIndex={-1}
-    onCancel={e=>{e.preventDefault();advance();}} onPointerDown={e=>{if(!e.target.closest('[data-bs-control]')){void immersive.current?.retryFromGesture(e.nativeEvent);advance();}}}>
+    onCancel={e=>{e.preventDefault();advance();}} onPointerDown={e=>{if(!e.target.closest('[data-bs-control]'))advance();}}>
     {phase==='end'?<EndTitle settings={settings}/>:<>
-      {clip.kind==='sequence'?<StartupSequence sound={settings.sound} volume={settings.volume} onEnded={showEnd}/>:<video data-testid="boot-video" ref={video} src={clip.url} loop={false} playsInline preload="auto" style={{objectFit:settings.fit || 'cover'}}
+      {clip.kind==='sequence'?<StartupSequence sound={settings.sound} volume={settings.volume} onEnded={showEnd}/>:<video data-testid="boot-video" ref={video} src={clip.url} loop={false} playsInline preload="auto" style={{objectFit:'cover'}}
         onPlaying={() => setBlocked(false)} onEnded={showEnd} onError={showEnd}/>}
       {blocked&&<button data-bs-control type="button" className="bs-play-manual" onClick={playManually}>▶ 点击播放</button>}
       {mutedFallback&&<button data-bs-control type="button" className="bs-sound" onClick={enableSound}>♪ 开启声音</button>}
@@ -297,7 +312,6 @@ export function SettingsPanel({ standalone = false }) {
         <Toggle label="启动时播放" description="每次打开 Harness 播放一次，切换会话不重复" checked={settings.enabled} disabled={busy} onChange={enabled=>save({enabled})}/>
         <Toggle label="播放声音" description="浏览器若拦截有声自动播放，动画仍会静音开始" checked={settings.sound} disabled={busy} onChange={sound=>save({sound})}/>
         {settings.sound&&<label className="bs-field"><span>音量</span><input aria-label="音量" type="range" min="0" max="100" value={draftVolume} disabled={busy} onChange={e=>setDraftVolume(Number(e.target.value))} onPointerUp={()=>save({volume:draftVolume/100})} onKeyUp={e=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key))save({volume:draftVolume/100});}}/><output>{draftVolume}%</output></label>}
-        <label className="bs-field"><span>画面显示<small>铺满会裁切边缘，完整显示会保留黑边</small></span><select aria-label="画面显示" disabled={busy} value={settings.fit} onChange={e=>save({fit:e.target.value})}><option value="cover">铺满窗口</option><option value="contain">完整显示</option></select></label>
         <Toggle label="随机开场" description="每次启动从片库随机选择；关闭后使用当前动画" checked={settings.shuffle} disabled={busy} onChange={shuffle=>save({shuffle})}/>
       </div>
       <div className="bs-help"><strong>像游戏一样开启。</strong><p>动画中按任意键跳到标题页，再按任意键进入。也支持鼠标点击与触屏；长按不会连跳。视频和结束图片都保存在本机。</p><span>视频：dsh-boot-animation · BSD-3-Clause　技术档案：dsh-startup-screen · MIT</span></div>

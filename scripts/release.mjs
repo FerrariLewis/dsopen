@@ -137,7 +137,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (npmUpdate) await writeFile(join(out, 'npm-update.json'), JSON.stringify(npmUpdate, null, 2) + '\n');
   await writeFile(join(out, 'plugin-index.json'), JSON.stringify(index, null, 2) + '\n');
   await writeFile(join(out, 'SHA256SUMS.txt'), `${artifact.sha256}  ${artifact.manifest.name.replace('/', '-')}-${artifact.manifest.version}.tgz\n` + (npmArtifact ? `${npmArtifact.sha256}  ${NPM_ENTRY_NAME}-${npmArtifact.manifest.version}.tgz\n${npmArtifact.sha256}  ${NPM_ENTRY_NAME}.tgz\n` : ''));
-  const highlights = update.version === '1.2.5' ? '本版本新增启动时检查更新与雾光磨砂提醒，支持自定义弹窗磨砂度和圆角。开场通过真正全屏隐藏原生窗口标题栏，进入应用后还原原窗口状态。侧栏快捷入口默认隐藏，可在设置中开启。内置片库更名为启、数字生命、朋克、半面、莱茵生命，封面更名为远山、黑金、蓝雾，原有素材画面与文字不变。设置底部新增恢复默认，二次确认后永久删除全部自定义视频和图片并重置偏好，只保留内置素材。\n\n' : '';
+  const highlights = update.version === '1.2.6' ? '修复开场误进入系统全屏的问题：动画现在仅铺满当前 Harness 窗口，不改变窗口大小、位置或最大化状态。删除开场视频的“画面显示”选项，视频固定铺满，旧设置自动兼容；结束图片的适配设置保持不变。\n\n当前 Harness 桌面端尚未开放单独隐藏 Windows 原生关闭、最大化、最小化按钮的插件接口，这三个按钮未作为本版本已完成的功能。\n\n' : update.version === '1.2.5' ? '本版本新增启动时检查更新与雾光磨砂提醒，支持自定义弹窗磨砂度和圆角。侧栏快捷入口默认隐藏，可在设置中开启。内置片库更名为启、数字生命、朋克、半面、莱茵生命，封面更名为远山、黑金、蓝雾，原有素材画面与文字不变。设置底部新增恢复默认，二次确认后永久删除全部自定义视频和图片并重置偏好，只保留内置素材。\n\n' : '';
   await writeFile(join(out, 'release-notes.md'), `DSH LEWIS ENCHANT · 附魔台｜开机动画 ${update.version}\n\n${highlights}使用插件设置中的检查更新进行原位升级，无需先卸载。升级后重新打开 Harness。个人视频、图片和播放偏好保留。\n\n源码提交：${update.sourceCommit}\n构建提交：${update.commit}\nSHA-256：${update.sha256}\n`);
   console.log(`Release metadata verified: ${update.packageName}@${update.version}\nDistribution commit: ${update.commit}\nImmutable tarball: ${update.tarballUrl}\nOutput: ${out}`);
 }

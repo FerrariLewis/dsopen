@@ -12,7 +12,7 @@ export const inject = ['webServer']
 export const BASE_PATH = '/dsh-boot-studio'
 export const MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 export const MAX_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024
-export const DEFAULT_SETTINGS = Object.freeze({ enabled: true, sound: false, volume: 0.7, fit: 'cover', shuffle: false, selectedId: 'brand', endScreen: 'logo', endImageId: null, logoVariant: 'silver', endFit: 'contain', updatePromptBlur: 30, updatePromptRadius: 30, showShortcut: false })
+export const DEFAULT_SETTINGS = Object.freeze({ enabled: true, sound: false, volume: 0.7, shuffle: false, selectedId: 'brand', endScreen: 'logo', endImageId: null, logoVariant: 'silver', endFit: 'contain', updatePromptBlur: 30, updatePromptRadius: 30, showShortcut: false })
 const BUILTINS = [
   { id: 'brand', name: '启', file: 'deepseek-brand-intro.mp4' },
   { id: 'cyberpunk', name: '数字生命', file: 'deepseek-cyberpunk-intro.mp4' },
@@ -45,12 +45,12 @@ function validateSettings(patch, current, available, availableImages = new Set()
   const next = { ...current }
   for (const [key, value] of Object.entries(patch)) {
     if (key === 'duration') throw new HttpError(400, '已取消播放时长设置，动画按原始长度完整播放。')
+    if (key === 'fit') throw new HttpError(400, '已取消画面显示设置，开机动画始终铺满当前窗口。')
     if (!Object.hasOwn(DEFAULT_SETTINGS, key)) throw new HttpError(400, `不支持的设置：${key}`)
     if (['enabled', 'sound', 'shuffle', 'showShortcut'].includes(key) && typeof value !== 'boolean') throw new HttpError(400, `${key} 必须是开关。`)
     if (key === 'volume' && !(typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1)) throw new HttpError(400, '音量须在 0 到 1 之间。')
     if (key === 'updatePromptBlur' && !(Number.isInteger(value) && value >= 0 && value <= 48)) throw new HttpError(400, '弹窗磨砂度须为 0 到 48 之间的整数。')
     if (key === 'updatePromptRadius' && !(Number.isInteger(value) && value >= 12 && value <= 40)) throw new HttpError(400, '弹窗圆角须为 12 到 40 之间的整数。')
-    if (key === 'fit' && !['cover', 'contain'].includes(value)) throw new HttpError(400, '画面适配须为 cover 或 contain。')
     if (key === 'selectedId' && !(typeof value === 'string' && available.has(value))) throw new HttpError(400, '所选动画不存在，请刷新片库。')
     if (key === 'endScreen' && !['logo', 'image'].includes(value)) throw new HttpError(400, '结束封面须为 logo 或 image。')
     if (key === 'endImageId' && value !== null && !(typeof value === 'string' && availableImages.has(value))) throw new HttpError(400, '所选封面图片不存在，请重新上传。')
@@ -170,11 +170,11 @@ export function createHandler(options = {}) {
       const uploads = saved.uploads.filter(c => c && UPLOAD_ID.test(c.id) && Object.hasOwn(TYPES, c.ext) && typeof c.name === 'string').map(c => ({ id: c.id, ext: c.ext, name: c.name.slice(0, 120) }))
       if (saved.endImages !== undefined && !Array.isArray(saved.endImages)) throw new HttpError(500, '结束封面片库格式不正确。')
       const endImages = (saved.endImages || []).filter(c => c && IMAGE_ID.test(c.id) && Object.hasOwn(IMAGE_TYPES, c.ext) && typeof c.name === 'string').map(c => ({ id: c.id, ext: c.ext, name: c.name.slice(0, 120) }))
-      // Earlier releases stored a playback cap. Ignore that retired field while
+      // Earlier releases stored a playback cap and video-fit preference. Ignore those retired fields while
       // preserving every remaining setting and personal-media manifest entry.
       const legacySettings = saved.settings || {}
       const settings = legacySettings && typeof legacySettings === 'object' && !Array.isArray(legacySettings)
-        ? Object.fromEntries(Object.entries(legacySettings).filter(([key]) => key !== 'duration')) : legacySettings
+        ? Object.fromEntries(Object.entries(legacySettings).filter(([key]) => key !== 'duration' && key !== 'fit')) : legacySettings
       try { store = { version: 1, settings: validateSettings(settings, DEFAULT_SETTINGS, new Set([...BUILTINS.map(c => c.id), SEQUENCE.id, ...uploads.map(c => c.id)]), new Set(endImages.map(c => c.id))), uploads, endImages } } catch { throw new HttpError(500, '已保存的设置格式不正确，请备份并检查 settings.json。') }
     })()
     await initializing

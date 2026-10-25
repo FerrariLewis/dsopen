@@ -46,9 +46,8 @@ export const CSS = `
 @media(max-width:850px){.bs-studio{padding:26px 24px}.bs-library{grid-template-columns:repeat(2,minmax(0,1fr))}.bs-heading h1{font-size:26px}.bs-modal{padding:14px}.bs-modal-close{right:20px;top:20px}}
 @media(max-width:520px){.bs-studio{padding:24px 16px;border-radius:10px}.bs-heading h1{font-size:23px}.bs-heading h1 span{margin-left:7px}.bs-eyebrow{font-size:8px}.bs-heading p{font-size:11px}.bs-toolbar{align-items:flex-start;flex-direction:column;margin-top:20px;gap:12px}.bs-library{gap:9px}.bs-clip-info{padding:9px 8px 6px;display:block}.bs-clip-info h3{font-size:11px}.bs-clip-info>span{font-size:9px}.bs-clip-actions{padding:0 8px 9px}.bs-clip-actions button{font-size:10px}.bs-upload{min-height:165px;padding:10px}.bs-upload small{font-size:9px}.bs-section-title>span{font-size:9px}.bs-toggle-row,.bs-field{padding:13px 12px;gap:10px}.bs-toggle-row small,.bs-field small{font-size:10px}.bs-toggle-row input{right:12px}.bs-player-top{padding:16px}.bs-player-top>span{font-size:8px;letter-spacing:1px}.bs-player-top b{display:none}.bs-player-top button{font-size:11px;padding:7px 9px}.bs-player-bottom{padding:18px 16px;font-size:10px}.bs-sound{right:16px;bottom:60px}.bs-modal{padding:7px}.bs-modal-close{right:13px;top:17px;font-size:10px}.bs-modal-body .bs-heading h1{font-size:21px}}
 @media(prefers-reduced-motion:reduce){.bs-player,.bs-studio *,.bs-player *{animation:none!important;transition:none!important}}
-/* The native titlebar disappears through the Fullscreen API; this only removes
-   Harness's optional HTML menu while the Player owns its immersive lease. */
-html[data-lewis-immersive="true"] [data-windows-menu]{visibility:hidden!important;pointer-events:none!important}
+/* Hide only the optional HTML menu. The desktop host owns native caption buttons. */
+html[data-lewis-player="true"] [data-windows-menu]{visibility:hidden!important;pointer-events:none!important}
 .bs-entry-title{margin-top:26px}
 .bs-reset-area{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:30px;padding:24px 0 2px;border-top:1px solid var(--bs-line)}
 .bs-reset-area strong{font-size:12px;font-weight:500;color:#d4dfd9}
