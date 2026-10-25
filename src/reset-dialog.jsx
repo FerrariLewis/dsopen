@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useEnchantAppearance } from './enchant-theme.jsx';
 
 /** Confirmation only: the parent owns the authenticated reset request. */
 export function ResetDialog({ settings = {}, onCancel, onConfirm }) {
+  const appearance = useEnchantAppearance();
   const dialog = useRef(null);
   const cancelButton = useRef(null);
   const mounted = useRef(true);
@@ -41,9 +43,7 @@ export function ResetDialog({ settings = {}, onCancel, onConfirm }) {
     // the fresh default state; failures remain visible and can be retried.
     if (mounted.current) onCancel?.();
   }
-  const radius = Number.isFinite(settings.updatePromptRadius) ? Math.min(40, Math.max(0, settings.updatePromptRadius)) : 30;
-  const blur = Number.isFinite(settings.updatePromptBlur) ? Math.min(48, Math.max(0, settings.updatePromptBlur)) : 30;
-  return <dialog ref={dialog} className="bs-startup-update bs-reset-dialog" data-testid="reset-dialog" style={{ '--bs-update-radius': `${radius}px`, '--bs-update-blur': `${blur}px` }} aria-labelledby="bs-reset-title" aria-describedby="bs-reset-description bs-reset-warning" aria-busy={busy} onCancel={event => { event.preventDefault(); cancel(); }}>
+  return <dialog ref={dialog} className="bs-startup-update bs-reset-dialog" data-testid="reset-dialog" {...appearance} aria-labelledby="bs-reset-title" aria-describedby="bs-reset-description bs-reset-warning" aria-busy={busy} onCancel={event => { event.preventDefault(); cancel(); }}>
     <div className="bs-startup-update-card bs-reset-card">
       <button className="bs-startup-update-close" type="button" aria-label="取消恢复默认" disabled={busy} onClick={cancel}>×</button>
       <div className="bs-startup-update-glyph bs-reset-glyph" aria-hidden="true">↺</div>
@@ -53,7 +53,7 @@ export function ResetDialog({ settings = {}, onCancel, onConfirm }) {
       <div className="bs-startup-update-summary bs-reset-summary">
         <p>删除全部上传的视频和图片</p>
         <p>重置播放、声音及结束画面等偏好</p>
-        <p>重置更新弹窗外观和侧栏快捷入口</p>
+        <p>重置侧栏快捷入口</p>
       </div>
       <p className="bs-startup-update-retain bs-reset-retain">安装包自带的动画和封面会保留。</p>
       <p id="bs-reset-warning" className="bs-reset-warning">此操作不可撤销，请先备份需要保留的素材。</p>

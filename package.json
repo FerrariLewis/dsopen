@@ -1,6 +1,6 @@
 {
   "name": "dsh-boot-studio",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "description": "DSH LEWIS ENCHANT · 附魔台｜开机动画：铺满当前窗口的完整开场、自定义视频与封面、启动检查更新和磨砂提示。",
   "type": "module",
   "main": "./lib/index.js",
@@ -14,6 +14,8 @@
     "lib",
     "assets/*.mp4",
     "assets/end-covers",
+    "assets/author",
+    "assets/deepsea-notices",
     "assets/startup-screen/LICENSE",
     "assets/startup-screen/NOTICE.md",
     "cordis.patch.yml",

@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { appliedUpdate, isAvailableUpdate, prepareAndInstallUpdate } from './startup-update.js';
+import { useEnchantAppearance } from './enchant-theme.jsx';
 
 export function UpdatePrompt({ request, status = {}, settings = {}, onDismiss, onUpdated, preview = false }) {
+  const appearance = useEnchantAppearance();
   const dialog = useRef(null);
   const mounted = useRef(true);
   const lock = useRef(false);
@@ -35,16 +37,14 @@ export function UpdatePrompt({ request, status = {}, settings = {}, onDismiss, o
     } catch (reason) { if (mounted.current) setError(reason.message || '更新未完成，请稍后重试。'); }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   }
-  const radius = Number.isFinite(settings.updatePromptRadius) ? Math.min(40, Math.max(0, settings.updatePromptRadius)) : 30;
-  const blur = Number.isFinite(settings.updatePromptBlur) ? Math.min(48, Math.max(0, settings.updatePromptBlur)) : 30;
-  return <dialog ref={dialog} className="bs-startup-update" data-testid="startup-update" data-preview={preview || undefined} style={{ '--bs-update-radius': `${radius}px`, '--bs-update-blur': `${blur}px` }} aria-labelledby="bs-startup-update-title" aria-describedby="bs-startup-update-description" onCancel={event => { event.preventDefault(); close(); }}>
-    <div className="bs-startup-update-card" style={{ '--bs-update-radius': `${radius}px`, '--bs-update-blur': `${blur}px` }}>
+  return <dialog ref={dialog} className="bs-startup-update" data-testid="startup-update" data-preview={preview || undefined} {...appearance} aria-labelledby="bs-startup-update-title" aria-describedby="bs-startup-update-description" onCancel={event => { event.preventDefault(); close(); }}>
+    <div className="bs-startup-update-card">
       <button className="bs-startup-update-close" type="button" aria-label={completed ? '关闭更新提示' : '稍后再说'} disabled={busy} onClick={close}>×</button>
       <div className="bs-startup-update-glyph" aria-hidden="true">✧</div>
       <p className="bs-startup-update-brand">DSH LEWIS ENCHANT{preview && <span> · 更新提醒外观预览</span>}</p>
       <h2 id="bs-startup-update-title">{completed ? '新的开场，已准备就绪。' : '新的开场，准备好了。'}</h2>
       <p id="bs-startup-update-description" className="bs-startup-update-copy">{preview ? '这里只预览弹窗外观，不会下载或安装更新。' : completed ? '重新打开 Harness，即可使用新版本。' : '发现开机动画新版本，为下一次启动添一点新意。'}</p>
-      <div className="bs-startup-update-versions"><span>v{status?.currentVersion || '1.2.5'}</span><span aria-hidden="true">→</span><strong>{preview ? '后续版本' : `v${status.latestVersion}`}</strong></div>
+      <div className="bs-startup-update-versions"><span>v{status?.currentVersion || '1.2.7'}</span><span aria-hidden="true">→</span><strong>{preview ? '后续版本' : `v${status.latestVersion}`}</strong></div>
       {!busy && !completed && <div className="bs-startup-update-summary"><p>完整安装包校验后更新</p><p>保留个人视频与封面</p><p>重新打开后使用新版本</p></div>}
       <p className="bs-startup-update-retain">你的视频、图片和设置都会保留</p>
       {busy && <p className="bs-startup-update-status" role="status" aria-live="polite">{phase === 'install' ? '校验通过，正在通过 Harness 应用更新…' : '正在下载并校验更新包…'}</p>}

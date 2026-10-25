@@ -36,6 +36,18 @@ Boot Studio supplies an isolated React/Shadow DOM adapter, automatic progression
 
 The upstream README excludes third-party material from the MIT code license and states its bundled MP3 recordings/effects came from third-party videos without authorization. **None of those MP3 files are copied or redistributed.** Speech and asset audio are disabled; optional sound comes exclusively from the original runtime's synthesized WebAudio effects. `sound=false` and volume zero disable audio context creation. This is a community adaptation, with no claimed affiliation or endorsement.
 
+## 鲸鱼娘 / Deepsea Echo
+
+`assets/deepseek-whale-girl-intro.mp4` adapts the complete official animation recording from [cshengyi023-collab/dsh-deepsea-echo](https://github.com/cshengyi023-collab/dsh-deepsea-echo), commit `c5599f80cf5a517e220a91524dbdda791406c09d`. The 70 original frames retain their original 66 ms timing, for a total of 4.620 seconds. The original synthesized sound has been trimmed to match the visual duration.
+
+The character artwork and its rendered animation are distributed under **CC BY-NC-SA 4.0**, including this transcoded video. They are excluded from this project's BSD code license. Full attribution chain: **上善 → ZipZipPipe → Small-tailqwq**. DeepSeek retains its brand rights. Original code and synthesized sound use MIT.
+
+The original [MIT license](assets/deepsea-notices/LICENSE), [artwork license](assets/deepsea-notices/LICENSE-ARTWORK.md), [complete attribution](assets/deepsea-notices/NOTICE-ARTWORK.md) and [adaptation details](assets/deepsea-notices/ADAPTATION.md) are included in the installation package. This project distributes this artwork for noncommercial use under the same artwork license.
+
+## Author-provided image
+
+`assets/author/author.jpg` is the original image supplied by the project owner for the author-information dialog. Its bytes and embedded payment information are unchanged. It is displayed locally, only when the user opens the author-information dialog; the plugin does not initiate a payment.
+
 ## Generated title covers
 
 The three PNGs in `assets/end-covers/` were generated and refined for this project with the built-in imagegen tool, then selected by the user: `silver.png` (white mountains), `gold.png` (gold mist), and `ice.png` (blue digital sea). They combine a light DeepSeek-derived whale mark with the earlier background concepts. They are distributed with this project's BSD-3-Clause license. The DeepSeek name and whale identity refer to the host product; this community project does not claim endorsement by DeepSeek.

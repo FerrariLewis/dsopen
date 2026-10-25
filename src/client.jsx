@@ -7,6 +7,9 @@ import { UpdatePrompt } from './update-prompt.jsx';
 import { startupUpdateSession, isAvailableUpdate } from './startup-update.js';
 import { getShortcutRegistry } from './shortcut-registry.js';
 import { ResetDialog } from './reset-dialog.jsx';
+import { AuthorDialog } from './author-dialog.jsx';
+import { useEnchantAppearance } from './enchant-theme.jsx';
+import { getEnchantRegistry, bindSettingsEntry } from './enchant-bridge.js';
 
 const BASE = '/dsh-boot-studio';
 const OPEN = 'dsh-boot-studio:open';
@@ -17,7 +20,7 @@ let launchDecisionSettled = false;
 let latestState = null;
 const subscribers = new Set();
 const playerWindows = new WeakMap();
-const VERSION = typeof __DSH_LEWIS_VERSION__ === 'string' ? __DSH_LEWIS_VERSION__ : '1.2.6';
+const VERSION = typeof __DSH_LEWIS_VERSION__ === 'string' ? __DSH_LEWIS_VERSION__ : '1.2.7';
 
 // A marker for Harness's optional HTML menu only. Native caption buttons are
 // owned by the desktop host; this lease never changes the native window state.
@@ -49,7 +52,10 @@ export async function api(path, options = {}) {
   } finally { clearTimeout(timer); }
 }
 function publish(value) { latestState = value; subscribers.forEach(fn => fn(value)); return value; }
-export function openSettings() { window.dispatchEvent(new Event(OPEN)); }
+export function openSettings() {
+  if (getEnchantRegistry().openControllerSettings('dsh-openup-lewis')) return;
+  window.dispatchEvent(new Event(OPEN));
+}
 function preview(clip, settings, endOnly = false) { window.dispatchEvent(new CustomEvent(PLAY, { detail: {clip, settings, endOnly} })); }
 function useStyles() {
   useEffect(() => {
@@ -174,6 +180,7 @@ function Toggle({ label, description, checked, onChange, disabled }) {
 }
 export function SettingsPanel({ standalone = false }) {
   useStyles();
+  const appearance = useEnchantAppearance();
   const [state, setState] = useState(latestState);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -181,11 +188,8 @@ export function SettingsPanel({ standalone = false }) {
   const [uploadPercent, setUploadPercent] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [pendingImageDelete,setPendingImageDelete]=useState(null);
-  const [draftVolume, setDraftVolume] = useState(70);
-  const [draftBlur,setDraftBlur] = useState(30);
-  const [draftRadius,setDraftRadius] = useState(30);
-  const [appearancePreview,setAppearancePreview] = useState(false);
   const [resetOpened,setResetOpened] = useState(false);
+  const [authorOpened,setAuthorOpened] = useState(false);
   const input = useRef(null);
   const imageInput=useRef(null);
   const active = useRef(true);
@@ -193,7 +197,7 @@ export function SettingsPanel({ standalone = false }) {
   const probeCancel=useRef(null);
   useEffect(() => {
     active.current = true;
-    const update = v => { setState(v);setDraftVolume(Math.round(v.settings.volume*100));setDraftBlur(v.settings.updatePromptBlur??30);setDraftRadius(v.settings.updatePromptRadius??30); };
+    const update = v => setState(v);
     subscribers.add(update);
     api('/state').then(publish).catch(e => setError(`连接失败：${e.message}。请重启 Harness 后重试。`));
     return () => { active.current=false; subscribers.delete(update);uploadRequest.current?.abort();probeCancel.current?.(); };
@@ -202,7 +206,7 @@ export function SettingsPanel({ standalone = false }) {
     if (busy) return;
     setBusy(true);setError('');setNotice('');
     try { publish(await api('/settings',{method:'POST',body:JSON.stringify(patch)}));setNotice('设置已保存，下次启动生效'); }
-    catch(e) {setError(e.message); if(state){setDraftVolume(Math.round(state.settings.volume*100));setDraftBlur(state.settings.updatePromptBlur??30);setDraftRadius(state.settings.updatePromptRadius??30);}}
+    catch(e) {setError(e.message);}
     finally {if(active.current)setBusy(false);}
   }
   async function restoreDefaults() {
@@ -279,13 +283,13 @@ export function SettingsPanel({ standalone = false }) {
   }
   const settings=state?.settings;
   const selected=state?.clips.find(c=>c.id===settings.selectedId) || state?.clips[0];
-  return <section className="bs-studio" data-testid="settings">
+  return <section className="bs-studio" data-testid="settings" {...appearance}>
     <div className="bs-heading"><div><div className="bs-eyebrow">DSH LEWIS ENCHANT</div><h1>附魔台<span>开机动画</span></h1><p>自定义你的开场，封面与声音。</p></div><span className="bs-version">V{VERSION}</span></div>
     <div className="bs-toolbar"><span className="bs-status"><i/>{settings ? settings.enabled ? '启动时自动播放' : '自动播放已关闭' : '正在连接…'}</span><button className="bs-primary" type="button" disabled={!selected || busy} onClick={()=>preview(selected,settings)}>▶ 预览当前动画</button></div>
     {error && <div className="bs-alert" role="alert">{error}<button type="button" onClick={()=>{setError('');api('/state').then(publish).catch(e=>setError(e.message));}}>重试</button></div>}
     <div className="bs-notice" role="status" aria-live="polite">{busy ? uploadPercent !== null ? `正在上传 ${uploadPercent}%` : notice || '正在保存…' : notice}</div>
     {settings && <>
-      <div className="bs-section-title"><h2>动画片库</h2><span>{state.clips.length} 段动画 · 选择后自动保存</span></div>
+      <div className="bs-section-title"><h2>动画片库</h2></div>
       <div className="bs-library">
         {state.clips.map((clip,index)=><article key={clip.id} className={`bs-clip ${clip.id===settings.selectedId?'is-selected':''}`}>
           <button type="button" className={`bs-thumbnail bs-tone-${index%4}`} aria-label={`预览 ${clip.name}`} onClick={()=>preview(clip,settings)} disabled={busy}>
@@ -298,34 +302,28 @@ export function SettingsPanel({ standalone = false }) {
         <button type="button" className="bs-upload" disabled={busy} onClick={()=>input.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();upload(e.dataTransfer.files?.[0]);}}><span>＋</span><strong>上传我的视频</strong><small>点击选择，或将视频拖到这里</small><small>MP4 / WebM / M4V · ≤ 200 MB</small></button>
       </div>
       <input ref={input} type="file" accept=".mp4,.m4v,.webm,video/mp4,video/webm" aria-label="上传开机视频" hidden onChange={e=>{upload(e.target.files?.[0]);e.target.value='';}} />
-      <div className="bs-section-title"><h2>结束停留画面</h2><button className="bs-text-button" type="button" disabled={busy||!selected} onClick={()=>preview(selected,settings,true)}>预览结束画面</button></div>
+      <div className="bs-section-title"><h2>结束停留画面</h2></div>
       <div className="bs-preferences bs-ending-settings">
-        <label className="bs-field"><span>播放结束后<small>始终停留，按任意键再进入 Harness</small></span><select aria-label="结束画面类型" disabled={busy} value={settings.endScreen||'logo'} onChange={e=>{if(e.target.value==='image'&&!settings.endImageId){imageInput.current?.click();return;}save({endScreen:e.target.value});}}><option value="logo">DeepSeek 标志</option><option value="image">我的图片</option></select></label>
+        <label className="bs-field"><span>播放结束后</span><select aria-label="结束画面类型" disabled={busy} value={settings.endScreen||'logo'} onChange={e=>{if(e.target.value==='image'&&!settings.endImageId){imageInput.current?.click();return;}save({endScreen:e.target.value});}}><option value="logo">DeepSeek 标志</option><option value="image">我的图片</option></select></label>
         {!!state.logos?.length&&<div className="bs-logo-options">{state.logos.map(logo=><button type="button" key={logo.id} disabled={busy} className={settings.endScreen==='logo'&&settings.logoVariant===logo.id?'is-selected':''} aria-label={`使用内置结束画面 ${logo.name}`} onClick={()=>save({endScreen:'logo',logoVariant:logo.id})}><img src={logo.url} alt=""/><span>{logo.name}{settings.endScreen==='logo'&&settings.logoVariant===logo.id?' ✓':''}</span></button>)}</div>}
-        <div className="bs-ending-preview"><div className="bs-ending-mini"><EndTitle settings={settings}/></div><div><strong>{settings.endScreen==='image'?'我的图片':state.logos?.find(logo=>logo.id===settings.logoVariant)?.name||'DeepSeek 标志'}</strong><p>画面保持静止，底部提示「按任意键进入」。</p><button type="button" className="bs-primary" disabled={busy} onClick={()=>imageInput.current?.click()}>上传结束图片</button><small>PNG / JPEG / WebP · ≤ 20 MB</small></div></div>
+        <div className="bs-ending-preview"><div className="bs-ending-mini"><EndTitle settings={settings}/></div><div><strong>{settings.endScreen==='image'?'我的图片':state.logos?.find(logo=>logo.id===settings.logoVariant)?.name||'DeepSeek 标志'}</strong><button type="button" className="bs-primary" disabled={busy} onClick={()=>imageInput.current?.click()}>上传结束图片</button><small>PNG / JPEG / WebP · ≤ 20 MB</small></div></div>
         {settings.endScreen==='image'&&<label className="bs-field"><span>结束图片显示</span><select aria-label="结束图片显示" value={settings.endFit||'contain'} disabled={busy} onChange={e=>save({endFit:e.target.value})}><option value="contain">完整显示</option><option value="cover">铺满窗口</option></select></label>}
         {!!state.endImages?.length&&<div className="bs-end-library">{state.endImages.map(image=><div className={`bs-end-card ${settings.endScreen==='image'&&settings.endImageId===image.id?'is-selected':''}`} key={image.id}><button type="button" disabled={busy} aria-label={`使用结束图片 ${image.name}`} onClick={()=>save({endImageId:image.id,endScreen:'image'})}><img src={image.url} alt=""/><span>{image.name}</span></button>{pendingImageDelete===image.id?<span><button type="button" disabled={busy} onClick={()=>removeEndImage(image)}>确认移除</button><button type="button" onClick={()=>setPendingImageDelete(null)}>取消</button></span>:<button type="button" disabled={busy} className="bs-delete" aria-label={`移除结束图片 ${image.name}`} onClick={()=>setPendingImageDelete(image.id)}>移除</button>}</div>)}</div>}
       </div>
       <input ref={imageInput} type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" aria-label="上传结束图片" hidden onChange={e=>{uploadEndImage(e.target.files?.[0]);e.target.value='';}}/>
-      <div className="bs-section-title"><h2>播放偏好</h2><span>修改立即保存</span></div>
+      <div className="bs-section-title"><h2>播放偏好</h2></div>
       <div className="bs-preferences">
-        <Toggle label="启动时播放" description="每次打开 Harness 播放一次，切换会话不重复" checked={settings.enabled} disabled={busy} onChange={enabled=>save({enabled})}/>
-        <Toggle label="播放声音" description="浏览器若拦截有声自动播放，动画仍会静音开始" checked={settings.sound} disabled={busy} onChange={sound=>save({sound})}/>
-        {settings.sound&&<label className="bs-field"><span>音量</span><input aria-label="音量" type="range" min="0" max="100" value={draftVolume} disabled={busy} onChange={e=>setDraftVolume(Number(e.target.value))} onPointerUp={()=>save({volume:draftVolume/100})} onKeyUp={e=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key))save({volume:draftVolume/100});}}/><output>{draftVolume}%</output></label>}
-        <Toggle label="随机开场" description="每次启动从片库随机选择；关闭后使用当前动画" checked={settings.shuffle} disabled={busy} onChange={shuffle=>save({shuffle})}/>
+        <Toggle label="启动时播放" checked={settings.enabled} disabled={busy} onChange={enabled=>save({enabled})}/>
+        <Toggle label="播放声音" checked={settings.sound} disabled={busy} onChange={sound=>save({sound})}/>
+        <Toggle label="随机开场" checked={settings.shuffle} disabled={busy} onChange={shuffle=>save({shuffle})}/>
       </div>
-      <div className="bs-help"><strong>像游戏一样开启。</strong><p>动画中按任意键跳到标题页，再按任意键进入。也支持鼠标点击与触屏；长按不会连跳。视频和结束图片都保存在本机。</p><span>视频：dsh-boot-animation · BSD-3-Clause　技术档案：dsh-startup-screen · MIT</span></div>
       <UpdatePanel request={api} standalone={standalone}/>
-      <div className="bs-section-title"><h2>更新提醒外观</h2><button className="bs-text-button" type="button" onClick={()=>setAppearancePreview(true)}>预览更新提醒</button></div>
-      <div className="bs-preferences">
-        <label className="bs-field"><span>磨砂度<small>调整更新弹窗的背景模糊程度</small></span><input aria-label="更新弹窗磨砂度" type="range" min="0" max="48" step="1" value={draftBlur} disabled={busy} onChange={e=>setDraftBlur(Number(e.target.value))} onPointerUp={e=>save({updatePromptBlur:Number(e.currentTarget.value)})} onKeyUp={e=>{if(['ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(e.key))save({updatePromptBlur:Number(e.currentTarget.value)});}}/><output>{draftBlur}px</output></label>
-        <label className="bs-field"><span>弹窗圆角<small>调整更新弹窗边角的圆润程度</small></span><input aria-label="更新弹窗圆角" type="range" min="12" max="40" step="1" value={draftRadius} disabled={busy} onChange={e=>setDraftRadius(Number(e.target.value))} onPointerUp={e=>save({updatePromptRadius:Number(e.currentTarget.value)})} onKeyUp={e=>{if(['ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(e.key))save({updatePromptRadius:Number(e.currentTarget.value)});}}/><output>{draftRadius}px</output></label>
-      </div>
       <div className="bs-section-title bs-entry-title"><h2>进入方式</h2></div>
       <div className="bs-preferences"><Toggle label="显示侧栏快捷入口" description="在头像上方显示“开机动画”；关闭后仍可从设置进入。附魔台系列最多显示17个快捷入口。" checked={settings.showShortcut??false} disabled={busy} onChange={showShortcut=>save({showShortcut})}/></div>
-      {appearancePreview&&<UpdatePrompt request={api} status={{currentVersion:VERSION}} settings={{...settings,updatePromptBlur:draftBlur,updatePromptRadius:draftRadius}} preview onDismiss={()=>setAppearancePreview(false)}/>}
       <div className="bs-reset-area"><div><strong>恢复默认</strong><p>重置所有设置，永久删除全部上传的视频和图片，仅保留内置素材。</p></div><button className="bs-reset-open" type="button" disabled={busy} onClick={()=>setResetOpened(true)}>恢复默认</button></div>
       {resetOpened&&<ResetDialog settings={settings} onCancel={()=>setResetOpened(false)} onConfirm={restoreDefaults}/>}
+      <div className="bs-author-entry"><span>点击了解更多作者信息</span><button type="button" aria-label="查看作者信息" onClick={()=>setAuthorOpened(true)}>查看<span aria-hidden="true">↗</span></button></div>
+      {authorOpened&&<AuthorDialog settings={settings} onClose={()=>setAuthorOpened(false)}/>}
     </>}
     {!state&&!error&&<div className="bs-loading">正在加载片库…</div>}
   </section>;
@@ -407,11 +405,16 @@ export function ShortcutAction() {
 export function apply(ctx) {
   const wire=ready=>{
     const register=()=>{
+      const registry=getEnchantRegistry();
+      const unregister=registry.registerPlugin({id:'dsh-openup-lewis',name:'开机动画',sectionId:'dsh-boot-studio-settings',renderSettings:()=>React.createElement(SettingsPanel),openSettings:()=>window.dispatchEvent(new Event(OPEN))});
+      try {
       ready.slots.inject('shell.overlay',()=>ready.slots.register({name:'shell.overlay',id:'dsh-boot-studio-overlay',order:950},()=>React.createElement(BootRoot)));
-      ready.slots.inject('settings.section',()=>ready.slots.register({name:'settings.section',id:'dsh-boot-studio-settings',order:80,label:()=> '开机动画'},()=>React.createElement(SettingsPanel)));
+      ready.slots.inject('settings.section',()=>bindSettingsEntry({slots:ready.slots,registry,pluginId:'dsh-openup-lewis',register:()=>ready.slots.register({name:'settings.section',id:'dsh-boot-studio-settings',order:80,label:()=> '开机动画'},()=>React.createElement(SettingsPanel))}));
       ready.slots.inject('sidebar.footer.action',()=>ready.slots.register({name:'sidebar.footer.action',id:'dsh-boot-studio-shortcut',order:42,label:()=> '开机动画'},()=>React.createElement(ShortcutAction)));
+      return unregister;
+      } catch (error) { unregister(); throw error; }
     };
-    if(typeof ready.effect==='function')ready.effect(register,'dsh-boot-studio: slots');else register();
+    if(typeof ready.effect==='function')return ready.effect(register,'dsh-boot-studio: slots');else return register();
   };
-  if(typeof ctx.inject==='function')ctx.inject(['slots'],wire);else if(ctx.slots)wire(ctx);
+  if(typeof ctx.inject==='function')return ctx.inject(['slots'],wire);else if(ctx.slots)return wire(ctx);
 }
