@@ -25,17 +25,17 @@
 
 ## 产品图片展示
 
-**远山**
+**GTA6**
 
-![远山标题封面](assets/end-covers/silver.png)
+![GTA6标题封面](assets/end-covers/gta6.png)
 
-**黑金**
+**地平线4**
 
-![黑金标题封面](assets/end-covers/gold.png)
+![地平线4标题封面](assets/end-covers/horizon4.png)
 
-**蓝雾**
+**刺客信条**
 
-![蓝雾标题封面](assets/end-covers/ice.png)
+![刺客信条标题封面](assets/end-covers/assassins-creed.png)
 
 ## 产品基本信息
 
