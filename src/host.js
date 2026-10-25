@@ -12,19 +12,28 @@ export const inject = ['webServer']
 export const BASE_PATH = '/dsh-boot-studio'
 export const MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 export const MAX_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024
-export const DEFAULT_SETTINGS = Object.freeze({ enabled: true, sound: false, volume: 0.7, shuffle: false, selectedId: 'brand', endScreen: 'logo', endImageId: null, logoVariant: 'silver', endFit: 'contain', showShortcut: false })
+export const DEFAULT_SETTINGS = Object.freeze({ enabled: true, videoEnabled: true, endEnabled: true, sound: false, volume: 0.7, shuffle: false, selectedId: 'brand', endScreen: 'logo', endImageId: null, logoVariant: 'silver', endFit: 'cover', showShortcut: false })
 const BUILTINS = [
   { id: 'brand', name: '启', file: 'deepseek-brand-intro.mp4' },
   { id: 'cyberpunk', name: '数字生命', file: 'deepseek-cyberpunk-intro.mp4' },
   { id: 'awakening', name: '朋克', file: 'deepseek-awakening-intro.mp4' },
   { id: 'startup', name: '半面', file: 'deepseek-startup-intro.mp4' },
   { id: 'whale-girl', name: '鲸鱼娘', file: 'deepseek-whale-girl-intro.mp4' },
+  { id: 'deepseek-title', name: 'DeepSeek', file: 'deepseek-title-intro.mp4' },
+  { id: 'deepseek-dance', name: '舞', file: 'deepseek-dance-intro.mp4' },
+  { id: 'deepseek-sea', name: '海', file: 'deepseek-sea-intro.mp4' },
 ]
 const SEQUENCE = { id: 'startup-screen', name: '莱茵生命', source: 'builtin', kind: 'sequence', bytes: 0 }
 const LOGOS = [
   { id: 'silver', name: '远山', file: 'silver.png' },
   { id: 'gold', name: '黑金', file: 'gold.png' },
   { id: 'ice', name: '蓝雾', file: 'ice.png' },
+  { id: 'assassins-creed', name: '刺客信条', file: 'assassins-creed.png', fit: 'cover' },
+  { id: 'cyberpunk-2077', name: '赛博朋克2077', file: 'cyberpunk-2077.png', fit: 'cover' },
+  { id: 'gta6', name: 'GTA6', file: 'gta6.png', fit: 'cover' },
+  { id: 'horizon6', name: '地平线6', file: 'horizon6.png', fit: 'cover' },
+  { id: 'horizon5', name: '地平线5', file: 'horizon5.png', fit: 'cover' },
+  { id: 'horizon4', name: '地平线4', file: 'horizon4.png', fit: 'cover' },
 ]
 const UPLOAD_ID = /^u_[a-f0-9-]{36}$/
 const IMAGE_ID = /^i_[a-f0-9-]{36}$/
@@ -49,15 +58,21 @@ function validateSettings(patch, current, available, availableImages = new Set()
     if (key === 'fit') throw new HttpError(400, '已取消画面显示设置，开机动画始终铺满当前窗口。')
     if (key === 'updatePromptBlur' || key === 'updatePromptRadius') throw new HttpError(400, '更新提醒使用统一外观，已取消单独调节。')
     if (!Object.hasOwn(DEFAULT_SETTINGS, key)) throw new HttpError(400, `不支持的设置：${key}`)
-    if (['enabled', 'sound', 'shuffle', 'showShortcut'].includes(key) && typeof value !== 'boolean') throw new HttpError(400, `${key} 必须是开关。`)
+    if (['enabled', 'videoEnabled', 'endEnabled', 'sound', 'shuffle', 'showShortcut'].includes(key) && typeof value !== 'boolean') throw new HttpError(400, `${key} 必须是开关。`)
     if (key === 'volume' && !(typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1)) throw new HttpError(400, '音量须在 0 到 1 之间。')
     if (key === 'selectedId' && !(typeof value === 'string' && available.has(value))) throw new HttpError(400, '所选动画不存在，请刷新片库。')
     if (key === 'endScreen' && !['logo', 'image'].includes(value)) throw new HttpError(400, '结束封面须为 logo 或 image。')
     if (key === 'endImageId' && value !== null && !(typeof value === 'string' && availableImages.has(value))) throw new HttpError(400, '所选封面图片不存在，请重新上传。')
-    if (key === 'logoVariant' && !['classic', 'silver', 'gold', 'ice'].includes(value)) throw new HttpError(400, '不支持此 Logo 样式。')
+    if (key === 'logoVariant' && value !== 'classic' && !LOGOS.some(logo => logo.id === value)) throw new HttpError(400, '不支持此结束画面。')
     if (key === 'endFit' && !['cover', 'contain'].includes(value)) throw new HttpError(400, '封面适配须为 cover 或 contain。')
     next[key] = value
   }
+  // Retain the old master switch for older clients. New clients own two stages;
+  // their OR is the compatible master value, never a third independent state.
+  if (Object.hasOwn(patch, 'enabled') && !Object.hasOwn(patch, 'videoEnabled') && !Object.hasOwn(patch, 'endEnabled')) {
+    next.videoEnabled = next.endEnabled = patch.enabled
+  }
+  next.enabled = next.videoEnabled || next.endEnabled
   if (next.endScreen === 'image' && !next.endImageId) throw new HttpError(400, '请先上传一张结束封面图片。')
   return next
 }
@@ -262,7 +277,8 @@ export function createHandler(options = {}) {
     }))
     const present = clips.filter(Boolean)
     const builtinClips = present.filter(clip => clip.source === 'builtin')
-    return [...builtinClips.filter(clip => clip.id !== 'whale-girl'), { ...SEQUENCE }, ...builtinClips.filter(clip => clip.id === 'whale-girl'), ...present.filter(clip => clip.source === 'upload')]
+    const beforeSequence = new Set(BUILTINS.slice(0, BUILTINS.findIndex(clip => clip.id === 'whale-girl')).map(clip => clip.id))
+    return [...builtinClips.filter(clip => beforeSequence.has(clip.id)), { ...SEQUENCE }, ...builtinClips.filter(clip => !beforeSequence.has(clip.id)), ...present.filter(clip => clip.source === 'upload')]
   }
 
   function publicClip(clip) {
@@ -289,14 +305,14 @@ export function createHandler(options = {}) {
     return logos.filter(Boolean)
   }
 
-  function publicLogo(logo) { return { id: logo.id, name: logo.name, url: `${BASE_PATH}/logo/${logo.id}`, bytes: logo.bytes } }
+  function publicLogo(logo) { return { id: logo.id, name: logo.name, url: `${BASE_PATH}/logo/${logo.id}`, bytes: logo.bytes, fit: logo.fit || 'cover' } }
 
   async function state(launch = false) {
     const clips = await library()
     const images = await imageLibrary()
     const logos = await logoLibrary()
     let selectedId = clips.some(c => c.id === store.settings.selectedId) ? store.settings.selectedId : (clips[0]?.id ?? null)
-    if (launch && store.settings.shuffle && clips.length) selectedId = clips[Math.floor(Math.random() * clips.length)].id
+    if (launch && store.settings.videoEnabled && store.settings.shuffle && clips.length) selectedId = clips[Math.floor(Math.random() * clips.length)].id
     const endImageId = images.some(image => image.id === store.settings.endImageId) ? store.settings.endImageId : null
     const endScreen = store.settings.endScreen === 'image' && !endImageId ? 'logo' : store.settings.endScreen
     return { settings: { ...store.settings, selectedId, endImageId, endScreen }, clips: clips.map(publicClip), endImages: images.map(publicImage), logos: logos.map(publicLogo), maxUploadBytes, maxImageUploadBytes, ...(launch ? { clip: clips.find(c => c.id === selectedId) ? publicClip(clips.find(c => c.id === selectedId)) : null } : {}) }

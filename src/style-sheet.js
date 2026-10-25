@@ -2,7 +2,7 @@ import { CSS } from './styles.js';
 
 export const STUDIO_STYLE_ID = 'dsh-boot-studio-style';
 // Independent of product/display version numbering. Increase when styles change.
-export const STUDIO_STYLE_REVISION = 2026102502;
+export const STUDIO_STYLE_REVISION = 2026102509;
 
 function fingerprint(value) {
   let hash = 2166136261;

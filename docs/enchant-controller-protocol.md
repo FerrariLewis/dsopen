@@ -54,10 +54,12 @@ const lease = registry.acquireController({
   // Synchronous: select this child and open the controller UI; return false
   // if the action could not be performed, so the child can fall back.
   openSettings: pluginId => openControllerAndSelect(pluginId),
-  theme: { effect: 'liquid-glass', accent: '#9edcca', blur: 30, radius: 30 },
+  theme: { appearanceMode: 'follow-host', effect: 'frosted', blur: 30, radius: 30 },
 });
 // On future controller preference changes:
-lease.setTheme({ accent: '#87b5ef' });
+lease.setTheme({ appearanceMode: 'custom', effect: 'liquid-glass', accent: '#87b5ef', colorScheme: 'dark', fontSize: 18 });
+// Follow General settings again without losing the controller's saved choices:
+lease.setTheme({ appearanceMode: 'follow-host' });
 // Teardown, including hot unload:
 lease.release();
 offHub();
@@ -98,14 +100,27 @@ are constructed from slot registration entries.
 
 ## Theme boundary
 
-Default is frozen `{effect:'frosted',accent:null,surface:null,blur:30,radius:30}`.
-Theme keys are restricted to `effect`, `accent`, `surface`, `blur`, `radius`.
-Colors accept only six-digit hex or null. Blur is an integer 0–48; radius is an
-integer 12–40. Invalid patches are rejected before modifying active theme.
+Default appearance mode is `follow-host`. The adapter reads Harness's actual
+`body[data-ds-dark-theme]`, `--dsh-content-font-size`, `--dsw-font-family`, and
+semantic palette/accent tokens. All plugin roots and native-dialog top layers
+subscribe to one read-only document observer. No General setting is written.
 
-`themeAttributes(snapshot.theme)` returns `data-lewis-effect`,
-`data-lewis-themed`, and CSS variables `--lewis-blur`, `--lewis-radius` plus
-optional `--lewis-accent`, `--lewis-accent-text`, and `--lewis-surface`.
+Theme keys are restricted to `appearanceMode`, `effect`, `accent`, `surface`,
+`colorScheme`, `fontSize`, `fontFamily`, `blur`, and `radius`. Mode is
+`follow-host` or `custom`; scheme is `light`, `dark`, or null; custom font size
+is an integer 10–32; font families use a bounded name-list whitelist. Colors
+accept only six-digit hex or null. Blur is an integer 0–48; radius is an integer
+12–40. Invalid patches are rejected before modifying active theme.
+
+Explicit `follow-host` ignores stored custom colors, scheme and typography.
+`custom` can override them independently. Buttons, toggles and selected outlines
+read `--lewis-accent`; artwork pixels are excluded. For compatibility, older
+controllers sending color overrides without an explicit mode imply `custom`.
+
+`useEnchantAppearance()` resolves host values and controller overrides through
+`themeAttributes(snapshot.theme, hostAppearance)`. It returns
+`data-lewis-effect`, `data-lewis-themed`, `data-lewis-color-scheme`,
+`data-lewis-appearance-mode`, typography, semantic palette and accent variables.
 The root component and every native-dialog top layer must subscribe and apply
 these attributes independently; a modal dialog must not rely on CSS inheritance
 from the settings panel that launched it. The media layer is excluded from
@@ -114,3 +129,10 @@ theme styling, so custom and bundled animation/image pixels are unchanged.
 No theme button is added by this protocol. A future controller can enable the
 effect on Windows, macOS or other supported web renderers. Actual Mac hardware
 behavior must still be verified on a Mac; a CSS mode is not proof of hardware QA.
+
+When an old immutable v1 registry is still loaded after a hot update, the adapter
+preserves it and its plugin entries. Check `registry.appearanceModes` before
+offering custom controls. `requiresReloadForCustomAppearance: true` means the
+normal Harness restart is needed to load the expanded protocol. The fallback
+continues to follow General settings and never replaces or duplicates the old
+registry's plugin descriptors.

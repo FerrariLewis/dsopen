@@ -24,7 +24,7 @@ export function UpdatePanel({request,standalone=false}) {
     }catch(e){setError(e.message);setMessage('');}finally{setBusy(false);}
   }
   return <div className="bs-update-area" data-testid="update-panel">
-    <div className="bs-section-title"><h2>版本与更新</h2><span>{status?.currentVersion?`v${status.currentVersion}`:'DSH LEWIS ENCHANT'}</span></div>
+    <div className="bs-section-title"><h2>版本与更新</h2><span>{status?.currentVersion?`v${status.currentVersion}`:'DSH LEWIS ENCHANTMENT'}</span></div>
     <div className="bs-update-card"><div><strong>一次安装，持续焕新</strong><p>更新会保留你的视频、结束图片和播放偏好。</p>{standalone&&<small>当前为独立预览。安装到 Harness 后，可在这里原位更新。</small>}</div>
       <div className="bs-update-actions"><button type="button" disabled={busy} onClick={check}>检查更新</button>{status?.available&&<button type="button" className="bs-primary" disabled={busy||standalone} onClick={update}>更新到 {status.latestVersion}</button>}</div>
     </div>

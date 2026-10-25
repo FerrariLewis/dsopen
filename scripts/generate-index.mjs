@@ -56,12 +56,12 @@ export function buildIndex({ manifest, repo, commit, publishTimestamp }) {
   const url = `https://github.com/${repo}`;
   return {
     format: 1,
-    title: { en: 'DSH LEWIS ENCHANT', zh: '附魔台 · 开机动画' },
+    title: { en: 'DSH LEWIS ENCHANTMENT', zh: '附魔台 · 开机动画' },
     description: { en: 'Startup animation releases for DeepSeek Harness.', zh: '附魔台开机动画的发布索引。' },
     metadata: { categories: { ui: { title: { en: 'Appearance', zh: '界面外观' } } } },
     plugins: [{
       name: manifest.name,
-      title: { en: 'DSH LEWIS ENCHANT', zh: '附魔台 · 开机动画' },
+      title: { en: 'DSH LEWIS ENCHANTMENT', zh: '附魔台 · 开机动画' },
       description: { en: 'Full-length cinematic intros, press-any-key title covers, personal media and in-place updates.', zh: manifest.description },
       author: typeof manifest.author === 'string' ? manifest.author : manifest.author?.name ?? repo.split('/')[0],
       homepage: `${url}#readme`,

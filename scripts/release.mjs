@@ -64,6 +64,11 @@ export async function inspectTarball(tarball) {
   requirePackageReleaseNotes(manifest);
   const required = ['package/lib/client.js', 'package/lib/index.js', 'package/lib/release-notes.js', 'package/cordis.patch.yml'];
   if (compareVersions(manifest.version, '1.2.7') >= 0) required.push('package/assets/author/author.jpg', 'package/assets/deepseek-whale-girl-intro.mp4', 'package/assets/deepsea-notices/LICENSE', 'package/assets/deepsea-notices/LICENSE-ARTWORK.md', 'package/assets/deepsea-notices/NOTICE-ARTWORK.md', 'package/assets/deepsea-notices/ADAPTATION.md');
+  if (compareVersions(manifest.version, '1.2.9') >= 0) required.push(
+    ...['assassins-creed', 'cyberpunk-2077', 'gta6', 'horizon6', 'horizon5', 'horizon4'].map(name => `package/assets/end-covers/${name}.png`),
+    'package/assets/deepseek-title-intro.mp4', 'package/assets/deepseek-dance-intro.mp4', 'package/assets/deepseek-sea-intro.mp4',
+    'package/assets/lxj-notices/LICENSE', 'package/assets/lxj-notices/NOTICE.md',
+  );
   if (!required.every(file => files.includes(file))) throw new Error('安装包缺少预构建 lib 或 bundle patch。');
   if (!manifest.dsh?.bundle?.patch) throw new Error('安装包不是可安装的 DSH bundle。');
   for (const lifecycle of ['preinstall', 'install', 'postinstall', 'prepare', 'preprepare', 'postprepare']) if (manifest.scripts?.[lifecycle]) throw new Error(`安装包含禁止的安装生命周期脚本：${lifecycle}`);
@@ -135,9 +140,9 @@ export async function main(argv = process.argv.slice(2)) {
     if (args['existing-npm']) assertExistingRelease(npmUpdate, JSON.parse(await readFile(resolve(args['existing-npm']), 'utf8')));
   }
   // Product display name is independent of the stable internal package id.
-  index.title = { en: 'DSH LEWIS ENCHANT', zh: '附魔台 · 开机动画' };
+  index.title = { en: 'DSH LEWIS ENCHANTMENT', zh: '附魔台 · 开机动画' };
   index.description = { en: 'Stable startup animation releases for DeepSeek Harness.', zh: '附魔台开机动画的稳定版本与更新目录。' };
-  index.plugins[0].title = { en: 'DSH LEWIS ENCHANT', zh: '附魔台 · 开机动画' };
+  index.plugins[0].title = { en: 'DSH LEWIS ENCHANTMENT', zh: '附魔台 · 开机动画' };
   const out = resolve(args.out || join(ROOT, 'release-assets'));
   await mkdir(out, { recursive: true });
   await writeFile(join(out, 'update.json'), JSON.stringify(update, null, 2) + '\n');
@@ -145,7 +150,7 @@ export async function main(argv = process.argv.slice(2)) {
   await writeFile(join(out, 'plugin-index.json'), JSON.stringify(index, null, 2) + '\n');
   await writeFile(join(out, 'SHA256SUMS.txt'), `${artifact.sha256}  ${artifact.manifest.name.replace('/', '-')}-${artifact.manifest.version}.tgz\n` + (npmArtifact ? `${npmArtifact.sha256}  ${NPM_ENTRY_NAME}-${npmArtifact.manifest.version}.tgz\n${npmArtifact.sha256}  ${NPM_ENTRY_NAME}.tgz\n` : ''));
   const highlights = requirePackageReleaseNotes(artifact.manifest);
-  await writeFile(join(out, 'release-notes.md'), `DSH LEWIS ENCHANT · 附魔台｜开机动画 ${update.version}\n\n${highlights}\n\n使用插件设置中的检查更新进行原位升级，无需先卸载。升级后重新打开 Harness。个人视频、图片和播放偏好保留。\n\n源码提交：${update.sourceCommit}\n构建提交：${update.commit}\nSHA-256：${update.sha256}\n`);
+  await writeFile(join(out, 'release-notes.md'), `DSH LEWIS ENCHANTMENT · 附魔台｜开机动画 ${update.version}\n\n${highlights}\n\n使用插件设置中的检查更新进行原位升级，无需先卸载。升级后重新打开 Harness。个人视频、图片和播放偏好保留。\n\n源码提交：${update.sourceCommit}\n构建提交：${update.commit}\nSHA-256：${update.sha256}\n`);
   console.log(`Release metadata verified: ${update.packageName}@${update.version}\nDistribution commit: ${update.commit}\nImmutable tarball: ${update.tarballUrl}\nOutput: ${out}`);
 }
 

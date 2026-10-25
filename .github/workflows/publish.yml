@@ -150,7 +150,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$REVISION" = 'none' ]; then
-            gh release create "v$VERSION" "release-assets/$TARBALL" "release-assets/$NPM_TARBALL" release-assets/dsh-openup-lewis.tgz release-assets/update.json release-assets/npm-update.json release-assets/plugin-index.json release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title "DSH LEWIS ENCHANT · 开机动画 $VERSION" --notes-file release-assets/release-notes.md --latest
+            gh release create "v$VERSION" "release-assets/$TARBALL" "release-assets/$NPM_TARBALL" release-assets/dsh-openup-lewis.tgz release-assets/update.json release-assets/npm-update.json release-assets/plugin-index.json release-assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title "DSH LEWIS ENCHANTMENT · 开机动画 $VERSION" --notes-file release-assets/release-notes.md --latest
           else
             # Re-read the release and npm immediately before replacing anything.
             CURRENT="$RUNNER_TEMP/revision-before-write"
@@ -165,7 +165,7 @@ jobs:
             node --input-type=module -e "import {assertNpmUnpublished} from './scripts/verify-unpublished-revision.mjs'; await assertNpmUnpublished({repo:process.env.GITHUB_REPOSITORY,version:process.env.VERSION});"
             git tag --force "v$VERSION" "$DIST_SHA"
             git push origin "refs/tags/v$VERSION:refs/tags/v$VERSION" "--force-with-lease=refs/tags/v$VERSION:$PREVIOUS_TAG_SHA"
-            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --title "DSH LEWIS ENCHANT · 开机动画 $VERSION" --notes-file release-assets/release-notes.md --latest
+            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --title "DSH LEWIS ENCHANTMENT · 开机动画 $VERSION" --notes-file release-assets/release-notes.md --latest
           fi
       - name: Advance the stable channel
         shell: bash
@@ -173,8 +173,8 @@ jobs:
           DIST_SHA: ${{ steps.distribution.outputs.commit }}
         run: |
           set -euo pipefail
-          printf '%s\n' 'DSH LEWIS ENCHANT stable update channel.' 'Versioned tarballs are immutable; these JSON files point to the latest verified version.' > "$RUNNER_TEMP/stable-notes.md"
+          printf '%s\n' 'DSH LEWIS ENCHANTMENT stable update channel.' 'Versioned tarballs are immutable; these JSON files point to the latest verified version.' > "$RUNNER_TEMP/stable-notes.md"
           if ! gh release view channel-stable --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create channel-stable --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title 'DSH LEWIS ENCHANT stable channel' --notes-file "$RUNNER_TEMP/stable-notes.md" --prerelease
+            gh release create channel-stable --repo "$GITHUB_REPOSITORY" --target "$DIST_SHA" --title 'DSH LEWIS ENCHANTMENT stable channel' --notes-file "$RUNNER_TEMP/stable-notes.md" --prerelease
           fi
           gh release upload channel-stable release-assets/update.json release-assets/npm-update.json release-assets/plugin-index.json --repo "$GITHUB_REPOSITORY" --clobber

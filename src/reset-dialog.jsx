@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useEnchantAppearance } from './enchant-theme.jsx';
 import { useStudioStyles } from './studio-styles.jsx';
+import { CloseIcon } from './close-icon.jsx';
 
 /** Confirmation only: the parent owns the authenticated reset request. */
 export function ResetDialog({ settings = {}, onCancel, onConfirm }) {
@@ -47,9 +48,9 @@ export function ResetDialog({ settings = {}, onCancel, onConfirm }) {
   }
   return <dialog ref={dialog} className="bs-startup-update bs-reset-dialog" data-testid="reset-dialog" {...appearance} aria-labelledby="bs-reset-title" aria-describedby="bs-reset-description bs-reset-warning" aria-busy={busy} onCancel={event => { event.preventDefault(); cancel(); }}>
     <div className="bs-startup-update-card bs-reset-card">
-      <button className="bs-startup-update-close" type="button" aria-label="取消恢复默认" disabled={busy} onClick={cancel}>×</button>
+      <button className="bs-startup-update-close" type="button" aria-label="取消恢复默认" disabled={busy} onClick={cancel}><CloseIcon/></button>
       <div className="bs-startup-update-glyph bs-reset-glyph" aria-hidden="true">↺</div>
-      <p className="bs-startup-update-brand">DSH LEWIS ENCHANT</p>
+      <p className="bs-startup-update-brand">DSH LEWIS ENCHANTMENT</p>
       <h2 id="bs-reset-title">回到最初的开场？</h2>
       <p id="bs-reset-description" className="bs-startup-update-copy">恢复默认后，开机动画将回到安装时的状态。</p>
       <div className="bs-startup-update-summary bs-reset-summary">
