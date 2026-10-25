@@ -22,9 +22,21 @@ The upstream LICENSE explicitly states that its `media/*.mp4` inputs and embedde
 | `assets/deepseek-awakening-intro.mp4` | `media/deepseek-awakening-intro.mp4` | `ff5afe0dabc16e09d5d1d4a349a551173a872f5c9850c0aab358ebaaf4b09712` |
 | `assets/deepseek-startup-intro.mp4` | `media/deepseek-startup-intro.mp4` | `ba72c501021444cd4bd89ce2cf547a539dfb0874c985a03859d048ee013acb4f` |
 
+## lxj5820 / dsh-boot-animation videos
+
+The three videos below are copied **unchanged** from [lxj5820/dsh-boot-animation](https://github.com/lxj5820/dsh-boot-animation), revision [`84c3a3f7614c7fd37bb68670342d9f5132dfc1e3`](https://github.com/lxj5820/dsh-boot-animation/tree/84c3a3f7614c7fd37bb68670342d9f5132dfc1e3). The filenames and interface names are local labels; the video, timing, and audio bytes are unmodified.
+
+Copyright (c) 2026 dsh-boot-animation contributors. The source LICENSE expressly states that its three MP4 files in `assets/videos/` are the author's own animation work, distributed under the same **MIT License** as its code. The complete original license, including that media permission statement, is included in [assets/lxj-notices/LICENSE](assets/lxj-notices/LICENSE), with an [attribution notice](assets/lxj-notices/NOTICE.md). These three clips are third-party works, not media created by this plugin's owner. The upstream fourth video and the `dsh-video-skin` chat-background video are not included.
+
+| Interface name | File in this project | Upstream source | SHA-256 |
+| --- | --- | --- | --- |
+| DeepSeek | `assets/deepseek-title-intro.mp4` | `assets/videos/1.mp4` | `970afeb9b8a981de88abc3997adba2d4aef7624d45b3deac9bab1033613ad937` |
+| 舞 | `assets/deepseek-dance-intro.mp4` | `assets/videos/2.mp4` | `95794b99c3ae4c3690ec2100e42a48dc79949111d565bb818e4aebfc90f45584` |
+| 海 | `assets/deepseek-sea-intro.mp4` | `assets/videos/3.mp4` | `585143d714778d48eb8fba277d5a4771e65fb5210dd1ffe3803515da41424471` |
+
 ## 用户上传的视频
 
-用户上传的视频保存在本机的数据目录，不会作为本插件的内置素材再分发。上述媒体授权说明只适用于本插件附带的四段上游视频。
+用户上传的视频保存在本机的数据目录，不会作为本插件的内置素材再分发。上述各项媒体授权说明仅适用于对应列明的第三方素材，不适用于用户上传的视频。
 
 ## dsh-startup-screen interactive startup sequence
 
@@ -50,4 +62,8 @@ The original [MIT license](assets/deepsea-notices/LICENSE), [artwork license](as
 
 ## Generated title covers
 
-The three PNGs in `assets/end-covers/` were generated and refined for this project with the built-in imagegen tool, then selected by the user: `silver.png` (white mountains), `gold.png` (gold mist), and `ice.png` (blue digital sea). They combine a light DeepSeek-derived whale mark with the earlier background concepts. They are distributed with this project's BSD-3-Clause license. The DeepSeek name and whale identity refer to the host product; this community project does not claim endorsement by DeepSeek.
+The original three generated covers are `silver.png` (white mountains), `gold.png` (gold mist), and `ice.png` (blue digital sea), selected by the project owner. They combine a light DeepSeek-derived whale mark with the earlier background concepts. This provenance notice does not add a new derivative-work or sublicensing license to the owner's generated media. The DeepSeek name and whale identity refer to the host product; this community project does not claim endorsement by DeepSeek.
+
+## 用户提供的新增封面
+
+`assassins-creed.png`（刺客信条）、`cyberpunk-2077.png`（赛博朋克2077）、`gta6.png`（GTA6）、`horizon6.png`（地平线6）、`horizon5.png`（地平线5）、`horizon4.png`（地平线4）来自项目所有者提供的图片。此处仅记录来源，不为这些自生成素材新增二创、衍生作品或再许可授权。此前第三方素材的许可与署名说明保持不变。
