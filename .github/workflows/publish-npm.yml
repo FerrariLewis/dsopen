@@ -1,7 +1,12 @@
-name: Publish npm short name
+name: Stage npm update for approval
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/publish-npm.yml'
+      - 'scripts/publish-npm-entry.mjs'
   workflow_run:
     workflows: ['Publish Open Beauty']
     branches: [main, master]
@@ -16,8 +21,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+  stage:
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository) ||
+      (github.event_name != 'workflow_run' &&
+       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -31,18 +41,24 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Use an npm CLI supporting trusted publishing
-        run: npm install --global npm@11 --ignore-scripts
-      - name: Download the exact GitHub Release package
+      - name: Use npm with staged trusted publishing
+        run: npm install --global npm@12.2.1 --ignore-scripts
+      - name: Download the exact verified GitHub Release package
         shell: bash
         run: |
           set -euo pipefail
           VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
           mkdir -p npm-release
           gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern "dsh-openup-lewis-$VERSION.tgz" --pattern npm-update.json --dir npm-release
-      - name: Verify package and publish using npm trusted publishing
+      - name: Verify package and submit for owner approval
         shell: bash
+        env:
+          RELEASE_SOURCE_COMMIT: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
         run: |
           set -euo pipefail
           VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
-          node scripts/publish-npm-entry.mjs --tarball "npm-release/dsh-openup-lewis-$VERSION.tgz" --metadata npm-release/npm-update.json --repo "$GITHUB_REPOSITORY"
+          SOURCE_ARGS=()
+          if [ -n "$RELEASE_SOURCE_COMMIT" ]; then
+            SOURCE_ARGS=(--source-commit "$RELEASE_SOURCE_COMMIT")
+          fi
+          node scripts/publish-npm-entry.mjs --tarball "npm-release/dsh-openup-lewis-$VERSION.tgz" --metadata npm-release/npm-update.json --repo "$GITHUB_REPOSITORY" "${SOURCE_ARGS[@]}"
