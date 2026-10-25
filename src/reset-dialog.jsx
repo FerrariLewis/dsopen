@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useEnchantAppearance } from './enchant-theme.jsx';
+import { useStudioStyles } from './studio-styles.jsx';
 
 /** Confirmation only: the parent owns the authenticated reset request. */
 export function ResetDialog({ settings = {}, onCancel, onConfirm }) {
+  useStudioStyles();
   const appearance = useEnchantAppearance();
   const dialog = useRef(null);
   const cancelButton = useRef(null);

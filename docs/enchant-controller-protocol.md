@@ -1,5 +1,19 @@
 # ENCHANT controller integration protocol v1
 
+## Author-written updates across the series
+
+Before every release of any ENCHANT product, ask the owner for the exact text to
+show to users. Do not generate or reuse announcement text on the owner's behalf.
+Provide a local preview and obtain the owner's confirmation before publishing.
+`package.json.lewisEnchantRelease` binds `{ version, notes }` to that product's
+actual package version. Preserve the approved text and line breaks; render it as
+plain React text in the update dialog. The registry metadata and archive must
+carry the same text so users on the npm mirror need no GitHub request to read it.
+New build/release/stage steps must reject missing or mismatched text. Legacy
+packages without text remain readable; a newly shipped renderer is required to
+display this field. Each separate repository should adopt the same validation
+contract and keep its own package/version identity.
+
 The current plugin remains independently usable. No controller is installed,
 required, created or persisted by this protocol. It does not modify host files,
 window state, uploaded media or plugin preferences. CSS `liquid-glass` is a web

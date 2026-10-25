@@ -5,6 +5,7 @@ import { gunzipSync } from 'node:zlib';
 import { resolve, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { assertRepository, inspectTarball } from './release.mjs';
+import { requirePackageReleaseNotes } from '../src/release-notes.js';
 
 export const NPM_PACKAGE_NAME = 'dsh-openup-lewis';
 const CORE_PACKAGE_NAME = 'dsh-boot-studio';
@@ -63,6 +64,7 @@ export async function buildNpmEntry({ tarball, out, repo }) {
   assertRepository(repo);
   if (!tarball || !out) throw new Error('必须指定 --tarball 和 --out。');
   const artifact = await inspectTarball(tarball);
+  requirePackageReleaseNotes(artifact.manifest);
   if (artifact.manifest.name !== CORE_PACKAGE_NAME) throw new Error('只能从 dsh-boot-studio 核心包生成 npm 分发包。');
   if (artifact.bytes > 80 * 1024 * 1024) throw new Error('核心包超过80 MB。');
   const files = regularFiles(await readFile(resolve(tarball)));

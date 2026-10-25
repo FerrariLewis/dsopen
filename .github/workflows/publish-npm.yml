@@ -36,6 +36,8 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
+      - name: Require author-written notes for this exact version
+        run: node scripts/check-release-notes.mjs
       - name: Use npm with staged trusted publishing
         run: npm install --global npm@12.2.1 --ignore-scripts
       - name: Download the exact verified GitHub Release package

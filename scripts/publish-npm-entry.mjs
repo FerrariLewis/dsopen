@@ -6,6 +6,7 @@ import { readFile, appendFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isNewerVersion, readPackageManifest, validateUpdateManifest } from '../src/updates.js';
+import { requirePackageReleaseNotes } from '../src/release-notes.js';
 
 export const ENTRY_NAME = 'dsh-openup-lewis';
 const LIFECYCLES = ['preinstall', 'install', 'postinstall', 'prepare', 'preprepare', 'postprepare', 'prepublish', 'prepublishOnly', 'prepack', 'postpack', 'postpublish'];
@@ -58,6 +59,7 @@ export async function stageNpmEntry({ metadata, archive, repo, sourceCommit, fet
   const update = validateUpdateManifest(metadata, { packageName: ENTRY_NAME, repo });
   if (archive.length !== update.bytes || createHash('sha256').update(archive).digest('hex') !== update.sha256) throw Error('npm 暂存包大小或 SHA-256 与 Release 清单不一致。');
   const manifest = readPackageManifest(archive);
+  if (requirePackageReleaseNotes(manifest) !== update.releaseNotes) throw Error('npm 暂存包的作者更新说明与 Release 清单不一致，未执行暂存。');
   if (manifest.name !== ENTRY_NAME || manifest.version !== update.version || !manifest.dsh?.bundle?.patch) throw Error('npm 暂存包名称、版本或 bundle 声明不符。');
   if (!repositoryMatches(manifest.repository, repo)) throw Error('npm 暂存包的 repository 与当前 GitHub 仓库不一致。');
   if (LIFECYCLES.some(name => manifest.scripts?.[name])) throw Error('npm 暂存包包含安装或发布生命周期脚本。');

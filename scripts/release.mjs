@@ -7,6 +7,7 @@ import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildIndex } from './generate-index.mjs';
 import { NPM_ENTRY_NAME } from '../src/updates.js';
+import { requirePackageReleaseNotes, validateReleaseNotes } from '../src/release-notes.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SHA = /^[a-f0-9]{40}$/;
@@ -33,6 +34,7 @@ export function assertVersionAdvance(manifest, previous) {
 }
 
 export function buildUpdate({ manifest, repo, commit, sourceCommit = commit, publishTimestamp, bytes, sha256 }) {
+  const notes = requirePackageReleaseNotes(manifest);
   assertRepository(repo);
   compareVersions(manifest.version, manifest.version);
   if (!SHA.test(commit ?? '') || !SHA.test(sourceCommit ?? '')) throw new Error('发布提交和源码提交必须是完整的 40 位小写 SHA。');
@@ -46,6 +48,7 @@ export function buildUpdate({ manifest, repo, commit, sourceCommit = commit, pub
     commit, sourceCommit, publishTimestamp, sha256, bytes,
     tarballUrl: `https://github.com/${repo}/releases/download/v${manifest.version}/${basename}`,
     releaseNotesUrl: `https://github.com/${repo}/releases/tag/v${manifest.version}`,
+    releaseNotes: { version: manifest.version, notes },
     requiresRestart: true,
   };
 }
@@ -58,7 +61,8 @@ export async function inspectTarball(tarball) {
   if (!files.every(file => file.startsWith('package/') && !file.split('/').includes('..') && !file.includes('\\'))) throw new Error('安装包包含不安全路径。');
   const raw = execFileSync(tar, ['-xOf', path, 'package/package.json'], { encoding: 'utf8', maxBuffer: 128 * 1024 });
   const manifest = JSON.parse(raw);
-  const required = ['package/lib/client.js', 'package/lib/index.js', 'package/cordis.patch.yml'];
+  requirePackageReleaseNotes(manifest);
+  const required = ['package/lib/client.js', 'package/lib/index.js', 'package/lib/release-notes.js', 'package/cordis.patch.yml'];
   if (compareVersions(manifest.version, '1.2.7') >= 0) required.push('package/assets/author/author.jpg', 'package/assets/deepseek-whale-girl-intro.mp4', 'package/assets/deepsea-notices/LICENSE', 'package/assets/deepsea-notices/LICENSE-ARTWORK.md', 'package/assets/deepsea-notices/NOTICE-ARTWORK.md', 'package/assets/deepsea-notices/ADAPTATION.md');
   if (!required.every(file => files.includes(file))) throw new Error('安装包缺少预构建 lib 或 bundle patch。');
   if (!manifest.dsh?.bundle?.patch) throw new Error('安装包不是可安装的 DSH bundle。');
@@ -71,6 +75,7 @@ export function assertExistingRelease(expected, existing) {
   for (const key of ['format', 'packageName', 'version', 'sourceCommit', 'sha256', 'bytes', 'tarballUrl', 'publishTimestamp']) {
     if (existing[key] !== expected[key]) throw new Error(`已有 v${expected.version} 的 ${key} 与本次构建不符，拒绝覆盖不可变版本。请提高版本号。`);
   }
+  if (validateReleaseNotes(existing.releaseNotes, existing.version, { required: true }) !== validateReleaseNotes(expected.releaseNotes, expected.version, { required: true })) throw new Error('已有版本的作者更新说明与本次不一致，拒绝覆盖不可变版本。');
   return existing.commit;
 }
 
@@ -106,6 +111,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (!args.tarball) throw new Error('请指定 --tarball。');
   const artifact = await inspectTarball(args.tarball);
   const current = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
+  if (requirePackageReleaseNotes(current) !== requirePackageReleaseNotes(artifact.manifest)) throw new Error('实际安装包的作者更新说明与当前 package.json 不一致。请重新构建打包。');
   for (const key of ['name', 'version']) if (current[key] !== artifact.manifest[key]) throw new Error(`实际安装包 ${key} 与当前 package.json 不一致。请重新构建打包。`);
   const repo = assertRepository(args.repo);
   const previous = args.previous === 'none' ? null : args.previous ? JSON.parse(await readFile(resolve(args.previous), 'utf8')) : await previousFromChannel(repo);
@@ -138,8 +144,8 @@ export async function main(argv = process.argv.slice(2)) {
   if (npmUpdate) await writeFile(join(out, 'npm-update.json'), JSON.stringify(npmUpdate, null, 2) + '\n');
   await writeFile(join(out, 'plugin-index.json'), JSON.stringify(index, null, 2) + '\n');
   await writeFile(join(out, 'SHA256SUMS.txt'), `${artifact.sha256}  ${artifact.manifest.name.replace('/', '-')}-${artifact.manifest.version}.tgz\n` + (npmArtifact ? `${npmArtifact.sha256}  ${NPM_ENTRY_NAME}-${npmArtifact.manifest.version}.tgz\n${npmArtifact.sha256}  ${NPM_ENTRY_NAME}.tgz\n` : ''));
-  const highlights = update.version === '1.2.7' ? '新增鲸鱼娘视频，保持原动画4.620秒长度，保留完整美术署名与CC BY-NC-SA 4.0许可。精简设置说明，播放偏好保留三个开关，新增作者信息图片弹窗。取消单独调节更新提醒磨砂度与圆角，保留统一雾光外观。预留附魔台控制器的主题、液态玻璃材质及设置入口合并接口；当前仍独立使用，无新增切换按钮。原有动画、封面及图片内文字保持不变。macOS已做跨平台代码与共享Chromium检查，尚未完成Mac真机测试。\n\n' : update.version === '1.2.6' ? '修复开场误进入系统全屏的问题：动画现在仅铺满当前 Harness 窗口，不改变窗口大小、位置或最大化状态。删除开场视频的“画面显示”选项，视频固定铺满，旧设置自动兼容；结束图片的适配设置保持不变。\n\n当前 Harness 桌面端尚未开放单独隐藏 Windows 原生关闭、最大化、最小化按钮的插件接口，这三个按钮未作为本版本已完成的功能。\n\n' : update.version === '1.2.5' ? '本版本新增启动时检查更新与雾光磨砂提醒，支持自定义弹窗磨砂度和圆角。侧栏快捷入口默认隐藏，可在设置中开启。内置片库更名为启、数字生命、朋克、半面、莱茵生命，封面更名为远山、黑金、蓝雾，原有素材画面与文字不变。设置底部新增恢复默认，二次确认后永久删除全部自定义视频和图片并重置偏好，只保留内置素材。\n\n' : '';
-  await writeFile(join(out, 'release-notes.md'), `DSH LEWIS ENCHANT · 附魔台｜开机动画 ${update.version}\n\n${highlights}使用插件设置中的检查更新进行原位升级，无需先卸载。升级后重新打开 Harness。个人视频、图片和播放偏好保留。\n\n源码提交：${update.sourceCommit}\n构建提交：${update.commit}\nSHA-256：${update.sha256}\n`);
+  const highlights = requirePackageReleaseNotes(artifact.manifest);
+  await writeFile(join(out, 'release-notes.md'), `DSH LEWIS ENCHANT · 附魔台｜开机动画 ${update.version}\n\n${highlights}\n\n使用插件设置中的检查更新进行原位升级，无需先卸载。升级后重新打开 Harness。个人视频、图片和播放偏好保留。\n\n源码提交：${update.sourceCommit}\n构建提交：${update.commit}\nSHA-256：${update.sha256}\n`);
   console.log(`Release metadata verified: ${update.packageName}@${update.version}\nDistribution commit: ${update.commit}\nImmutable tarball: ${update.tarballUrl}\nOutput: ${out}`);
 }
 

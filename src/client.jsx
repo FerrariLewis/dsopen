@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { CSS } from './styles.js';
+import { useStudioStyles as useStyles } from './studio-styles.jsx';
 import { WHALE_PATH } from './logo-path.js';
 import { StartupSequence } from './startup-screen.jsx';
 import { UpdatePanel } from './update-panel.jsx';
@@ -20,7 +20,7 @@ let launchDecisionSettled = false;
 let latestState = null;
 const subscribers = new Set();
 const playerWindows = new WeakMap();
-const VERSION = typeof __DSH_LEWIS_VERSION__ === 'string' ? __DSH_LEWIS_VERSION__ : '1.2.7';
+const VERSION = typeof __DSH_LEWIS_VERSION__ === 'string' ? __DSH_LEWIS_VERSION__ : '1.2.8';
 
 // A marker for Harness's optional HTML menu only. Native caption buttons are
 // owned by the desktop host; this lease never changes the native window state.
@@ -57,12 +57,6 @@ export function openSettings() {
   window.dispatchEvent(new Event(OPEN));
 }
 function preview(clip, settings, endOnly = false) { window.dispatchEvent(new CustomEvent(PLAY, { detail: {clip, settings, endOnly} })); }
-function useStyles() {
-  useEffect(() => {
-    let el = document.getElementById('dsh-boot-studio-style');
-    if (!el) { el = document.createElement('style'); el.id = 'dsh-boot-studio-style'; el.textContent = CSS; document.head.appendChild(el); }
-  }, []);
-}
 export function EndTitle({ settings }) {
   const [imageFailed,setImageFailed] = useState(false);
   useEffect(()=>setImageFailed(false),[settings.endImageId,settings.logoVariant,settings.endScreen]);

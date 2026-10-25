@@ -2,12 +2,15 @@ import { build } from 'esbuild'
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { requirePackageReleaseNotes } from '../src/release-notes.js'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+requirePackageReleaseNotes(pkg)
 await mkdir(join(root, 'lib'), { recursive: true })
 await copyFile(join(root, 'src/host.js'), join(root, 'lib/index.js'))
 await copyFile(join(root, 'src/updates.js'), join(root, 'lib/updates.js'))
+await copyFile(join(root, 'src/release-notes.js'), join(root, 'lib/release-notes.js'))
 const common = { bundle: true, sourcemap: false, legalComments: 'eof', target: ['chrome110'], define: { 'process.env.NODE_ENV': '"production"', '__DSH_LEWIS_VERSION__': JSON.stringify(pkg.version) } }
 await build({
   ...common,
