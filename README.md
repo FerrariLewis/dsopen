@@ -1,4 +1,4 @@
-`https://github.com/FerrariLewis/open/releases/latest/download/dsh-openup-lewis.tgz`
+`dsh-openup-lewis`
 
 # DSH Open Beauty · 开场美学
 
