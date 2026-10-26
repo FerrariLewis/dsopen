@@ -43,7 +43,7 @@
 
 **地平线6**
 
-![地平线6标题封面](assets/end-cover/horizon6.png)
+![地平线6标题封面](assets/end-covers/horizon6.png)
 
 ## 产品基本信息
 
