@@ -1,57 +1,74 @@
 `dsh-openup-lewis`
 
-# DSH LEWIS ENCHANTMENT · 附魔台｜开机动画
+English | [简体中文](./README.cn.md)
 
-## 产品介绍
+# DSH LEWIS ENCHANTMENT | Startup Animation
 
-自定义你的开场，封面与声音。插件名称：dsh-openup-lewis
+## Disclaimer
 
-「附魔台」是 DSH LEWIS ENCHANTMENT 的统一品牌，「开机动画」是本插件的功能名称。为 DeepSeek Harness 带来完整开场、DeepSeek 标题封面，以及按任意键进入的游戏式启动体验。
+Sorry, we haven't added English support yet.
 
-## 产品功能
+My skills and knowledge are limited, and this plugin was created largely with the help of AI. It is currently not available in mainstream plugin marketplaces.
 
-- **完整开场**：内置「启」「数字生命」「朋克」「半面」「鲸鱼娘」「DeepSeek」「舞」「海」「莱茵生命」九段视频，视频按原长度、原速播放，铺满当前 Harness 窗口，保持窗口大小、位置和最大化状态。
-- **任意键进入**：同时启用两段开场时，动画中按任意键或点击进入结束画面，再操作一次进入 Harness；仅启用视频时，播放结束或跳过后直接进入。
-- **九款结束画面**：远山、黑金、蓝雾、刺客信条、赛博朋克2077、GTA6、地平线6、地平线5、地平线4；仅用于开场后的结束停留画面。
-- **自定义素材**：上传自己的视频作为开场，上传喜欢的图片作为结束封面。
-- **独立播放开关**：开机动画与结束停留画面分别启用，可仅视频、仅图片、两者都播放或直接进入应用；另有播放声音与随机开场。
-- **透明界面**：跟随 Harness 的通用浅深色、字号、字体和强调色，透出当前界面的背景。
-- **启动检查更新**：每次重新打开 Harness 自动检查新版本，开场结束并进入应用后再提醒；可选择稍后或直接更新，无需先卸载。
-- **版本更新说明**：更新弹窗展示对应版本的作者说明；手动检查后显示结果弹窗，下载时显示进度，更新完成后手动重启 Harness 生效。
-- **可选快捷入口**：默认从设置进入，可自行开启头像上方的“开机动画”按钮；附魔台系列共享最多 17 个快捷入口。
-- **本地保存**：个人视频、图片和播放偏好保存在本机，正常更新后保留。
-- **恢复默认**：设置底部可一键恢复安装时的状态；二次确认后重置全部偏好并永久删除所有上传的视频和图片，保留内置动画与封面。
+Most importantly, all nine videos included in this plugin were copied from projects by other talented creators on GitHub. The relevant open-source licenses are provided at the end of this README.
 
-## 产品图片展示
+This plugin is entirely noncommercial, and all features are available free of charge. If any content infringes your rights, please contact me at lewiszhouyichen@gmail.com. Thank you.
 
-**GTA6**
+## Introduction
 
-![GTA6标题封面](assets/end-covers/gta6.png)
+Customize your startup experience with videos, cover images, and sound. Simply enter dsh-openup-lewis in the plugin installation section of DeepSeek Harness to install or update the plugin. Both the official npm registry and domestic mirror registries in China are supported.
 
-**地平线4**
+Created as part of DSH LEWIS ENCHANTMENT, this plugin brings full-length startup videos, DeepSeek title screens, and a game-style “press any key to enter” experience to DeepSeek Harness. Make your DeepSeek Harness experience more engaging.
 
-![地平线4标题封面](assets/end-covers/horizon4.png)
+## Features
 
-**刺客信条**
+- **Full-length startup videos** : Includes nine built-in videos**:“Beginning,” “Digital Life,” “Punk,” “Half Face,” “Whale Girl,” “DeepSeek,” “Dance,” “Sea,” and “Rhine Lab.” Videos play at their original length and speed, filling the current Harness window.
+- **Press any key to enter** : When both the startup video and title screen are enabled, pressing any key or clicking during playback skips to the title screen; another keypress or click enters Harness. When only the video is enabled, Harness opens directly after playback ends or is skipped.
+- **Nine title screens** : Choose from “Distant Mountains,” “Black and Gold,” “Blue Mist,” “Assassin’s Creed,” “Cyberpunk 2077,” “GTA 6,” “Forza Horizon 5,” “Forza Horizon 6,” and “Forza Horizon 4.” These screens remain visible after the video ends, recreating the feeling of launching a game. Previews are available in settings.
+- **Custom media** : Upload your own startup videos and use your favorite images as title screens.
+- **Independent playback controls** : Enable the startup video and title screen separately. Play only a video, display only an image, use both, or enter the app directly. Sound playback and random startup videos are also available.
+- **Appearance integration** : Follows Harness’s light and dark themes, font size, font family, and accent color, while allowing the current interface background to show through.
+- **Update checks at startup** : Automatically checks for new versions whenever Harness is reopened. Update notifications appear after the startup sequence finishes and you enter the app. You can update immediately or postpone, with no need to uninstall first.
+- **Optional shortcut** : Access the plugin through settings by default, or enable a “Startup Animation” button above your avatar. The Enchantment series supports up to 17 shared shortcut entries.
+- **Local storage** : Your videos, images, and playback preferences are stored locally and retained during normal updates.
+- **Restore defaults** : Restore the plugin to its initial state using the button at the bottom of settings. After a second confirmation, all preferences are reset and all uploaded videos and images are permanently deleted. Built-in videos and cover images are retained.
 
-![刺客信条标题封面](assets/end-covers/assassins-creed.png)
+## Screenshots
 
-## 产品基本信息
+- **Please note** : The startup videos cannot be displayed here because the files are too large. I apologize for the inconvenience. Most are popular videos you may have come across on Douyin. Below are four examples of the title screens.
 
-| 项目 | 信息 |
+**Cyperpunk 2077**
+
+![Cyperpunk 2077 title screen](assets/end-covers/cyberpunk-2077.png)
+
+**Forza Horizon 4**
+
+![Forza Horizon 4 title screen](assets/end-covers/horizon4.png)
+
+**Assassin's Creed**
+
+![Assassin's Creed title screen](assets/end-covers/assassins-creed.png)
+
+**Forza Horizon 6**
+
+![Forza Horizon 6 title screen](assets/end-covers/horizon6.png)
+
+## Plugin Information
+
+| Item | Details |
 | --- | --- |
-| 统一品牌 | DSH LEWIS ENCHANTMENT · 附魔台 |
-| 功能项目 | 开机动画 |
-| 插件名称 | dsh-openup-lewis |
-| 当前版本 | 1.2.10 |
-| 作者 | FerrariLewis |
-| 适用版本 | DeepSeek Harness ≥ 0.2.1-rc.2 且 < 0.3.0 |
-| 桌面平台 | Windows / macOS；已完成跨平台代码检查及 Chromium 播放验证，macOS 尚未进行真机测试。 |
-| 窗口按钮 | 当前 Harness 桌面版尚未提供插件单独隐藏原生关闭、最大化、最小化按钮的接口。 |
-| 安装方法 | 在 Harness → 插件 → 添加插件 → 包名或地址中，粘贴本文第一行的安装码，安装并启用后重新打开 Harness。无需 Git、npm 账号或命令行。 |
-| 设置入口 | 设置 → 开机动画 |
-| 视频格式 | MP4 / M4V / WebM，单个文件最大 200 MB |
-| 图片格式 | PNG / JPEG / WebP，单张图片最大 20 MB |
-| 更新入口 | 启动时自动检查；也可进入设置 → 开机动画 → 版本与更新，手动检查。npm 分发版从 npm 源获取已公开的版本。 |
-| 开源许可 | [BSD-3-Clause](LICENSE)；素材来源与授权见[第三方说明](THIRD_PARTY_NOTICES.md)。 |
-| 鲸鱼娘素材 | 美术及动画画面按 CC BY-NC-SA 4.0 非商业分发，保留完整作者署名；详见[素材说明](assets/deepsea-notices/ADAPTATION.md)。 |
+| Series | DSH LEWIS ENCHANTMENT · 附魔台|
+| Feature | Startup Animation |
+| Plugin name | dsh-openup-lewis |
+| Current version | 1.2.10 |
+| Author | FerrariLewis |
+| Supported version | DeepSeek Harness ≥ 0.2.1-rc.2 and < 0.3.0 |
+| Desktop platforms |  Windows / macOS. Cross-platform code checks and Chromium playback validation have been completed. Testing on a physical Mac has not yet been performed.|
+| Window controls | The current Harness desktop app does not provide an API that allows individual plugins to hide the native close, maximize, and minimize buttons, so a completely seamless full-screen experience is not currently possible. |
+| Installation | Go to Harness → Plugins → Add Plugin → Package Name or Address, paste dsh-openup-lewis, then install and enable the plugin. Reopen Harness afterward. No Git, npm account, or command line is required.|
+| Settings | Settings → Startup Animation |
+| Video formats | MP4 / M4V / WebM; maximum 200 MB per file|
+| Image formats | PNG / JPEG / WebP; maximum 20 MB per image|
+| Updates | Updates are checked automatically at startup. You can also check manually under Settings → Startup Animation → Version & Updates. The npm-distributed edition retrieves published versions from the npm registry.|
+| Open-source license | [BSD-3-Clause](LICENSE)； For asset sources and licensing information, see the[note](THIRD_PARTY_NOTICES.md) |
+| Whale Girl assets | Artwork and animation visuals are distributed for noncommercial use under CC BY-NC-SA 4.0, with full creator attribution retained. See the [note](assets/deepsea-notices/ADAPTATION.md) |
