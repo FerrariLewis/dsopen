@@ -60,7 +60,7 @@ Created as part of DSH LEWIS ENCHANTMENT, this plugin brings full-length startup
 | Plugin name | dsh-openup-lewis |
 | Current version | 1.2.10 |
 | Author | FerrariLewis |
-| Supported version | DeepSeek Harness ≥ 0.2.1-rc.2 且 < 0.3.0 |
+| Supported version | DeepSeek Harness ≥ 0.2.1-rc.2 and < 0.3.0 |
 | Desktop platforms |  Windows / macOS. Cross-platform code checks and Chromium playback validation have been completed. Testing on a physical Mac has not yet been performed.|
 | Window controls | The current Harness desktop app does not provide an API that allows individual plugins to hide the native close, maximize, and minimize buttons, so a completely seamless full-screen experience is not currently possible. |
 | Installation | Go to Harness → Plugins → Add Plugin → Package Name or Address, paste dsh-openup-lewis, then install and enable the plugin. Reopen Harness afterward. No Git, npm account, or command line is required.|
