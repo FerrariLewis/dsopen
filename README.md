@@ -31,7 +31,7 @@ Created as part of DSH LEWIS ENCHANTMENT, this plugin brings full-length startup
 - **Local storage** : Your videos, images, and playback preferences are stored locally and retained during normal updates.
 - **Restore defaults** : Restore the plugin to its initial state using the button at the bottom of settings. After a second confirmation, all preferences are reset and all uploaded videos and images are permanently deleted. Built-in videos and cover images are retained.
 
-##Screenshots
+## Screenshots
 
 - **Please note** : The startup videos cannot be displayed here because the files are too large. I apologize for the inconvenience. Most are popular videos you may have come across on Douyin. Below are four examples of the title screens.
 
@@ -51,7 +51,7 @@ Created as part of DSH LEWIS ENCHANTMENT, this plugin brings full-length startup
 
 ![Forza Horizon 6 title screen](assets/end-covers/horizon6.png)
 
-##Plugin Information
+## Plugin Information
 
 | Item | Details |
 | --- | --- |
