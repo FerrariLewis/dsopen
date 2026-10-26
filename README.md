@@ -68,5 +68,5 @@ Created as part of DSH LEWIS ENCHANTMENT, this plugin brings full-length startup
 | Video formats | MP4 / M4V / WebM; maximum 200 MB per file|
 | Image formats | PNG / JPEG / WebP; maximum 20 MB per image|
 | Updates | Updates are checked automatically at startup. You can also check manually under Settings → Startup Animation → Version & Updates. The npm-distributed edition retrieves published versions from the npm registry.|
-| Open-source license | [BSD-3-Clause](LICENSE)； For asset sources and licensing information, see the(THIRD_PARTY_NOTICES.md)。 |
-| Whale Girl assets | Artwork and animation visuals are distributed for noncommercial use under CC BY-NC-SA 4.0, with full creator attribution retained. See the (assets/deepsea-notices/ADAPTATION.md)。 |
+| Open-source license | [BSD-3-Clause](LICENSE)； For asset sources and licensing information, see the[note](THIRD_PARTY_NOTICES.md) |
+| Whale Girl assets | Artwork and animation visuals are distributed for noncommercial use under CC BY-NC-SA 4.0, with full creator attribution retained. See the [note](assets/deepsea-notices/ADAPTATION.md) |
