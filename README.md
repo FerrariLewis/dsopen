@@ -1,6 +1,6 @@
 `dsh-openup-lewis`
 
-# DSH LEWIS ENCHANTMENT · 附魔台｜开机动画
+# DSH LEWIS ENCHANTMENT｜开机动画
 
 ## 事先声明
 
@@ -57,7 +57,7 @@
 | 适用版本 | DeepSeek Harness ≥ 0.2.1-rc.2 且 < 0.3.0 |
 | 桌面平台 | Windows / macOS；已完成跨平台代码检查及 Chromium 播放验证，macOS 尚未进行真机测试|
 | 窗口按钮 | 当前 Harness 桌面版尚未提供插件单独隐藏原生关闭、最大化、最小化按钮的接口。因此无法做到完美适配全屏幕|
-| 安装方法 | 在 Harness → 插件 → 添加插件 → 包名或地址中，粘贴本文第一行的安装码，安装并启用后重新打开 Harness。无需 Git、npm 账号或命令行|
+| 安装方法 | 在 Harness → 插件 → 添加插件 → 包名或地址中，粘贴本文第一行的安装码,即dsh-openup-lewis，安装并启用后重新打开 Harness。无需 Git、npm 账号或命令行|
 | 设置入口 | 设置 → 开机动画 |
 | 视频格式 | MP4 / M4V / WebM，单个文件最大 200 MB |
 | 图片格式 | PNG / JPEG / WebP，单张图片最大 20 MB |
