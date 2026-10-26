@@ -6,6 +6,8 @@ English | [简体中文](./README.cn.md)
 
 ## Disclaimer
 
+Sorry, we haven't added English support yet.
+
 My skills and knowledge are limited, and this plugin was created largely with the help of AI. It is currently not available in mainstream plugin marketplaces.
 
 Most importantly, all nine videos included in this plugin were copied from projects by other talented creators on GitHub. The relevant open-source licenses are provided at the end of this README.
