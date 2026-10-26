@@ -101,25 +101,68 @@ const completedUpdates = new Map();
 const updateKey = status => `${status?.packageName}@${status?.latestVersion}`;
 export function appliedUpdate(status) { return completedUpdates.get(updateKey(status)) || null; }
 
+/** Plugin disposal can invalidate a pending download, never retract an install
+ * already sent to Harness. Ordinary settings-panel unmounts do not call this. */
+export function cancelPendingUpdates() {
+  let count = 0;
+  for (const [key, task] of activeUpdates) {
+    if (task.installStarted || task.canceled) continue;
+    task.canceled = true;
+    task.stopPolling?.();
+    if (activeUpdates.get(key) === task) activeUpdates.delete(key);
+    count++;
+  }
+  return count;
+}
+
 /** Manual and automatic prompts share validation and one install per artifact. */
-export async function prepareAndInstallUpdate(request, status, { onPhase, install = installVerifiedUpdate } = {}) {
+export async function prepareAndInstallUpdate(request, status, { onPhase, onProgress, install = installVerifiedUpdate, pollInterval = 500 } = {}) {
   if (!isAvailableUpdate(status)) throw Error('更新版本无效或尚未公开，请重新检查更新。');
   const key = updateKey(status);
   if (completedUpdates.has(key)) return completedUpdates.get(key);
   let task = activeUpdates.get(key);
   if (!task) {
-    task = { observers: new Set(), phase: 'prepare', promise: null };
+    task = { observers: new Set(), progressObservers: new Set(), phase: 'prepare', progress: { version: status.latestVersion, phase: 'prepare', downloadedBytes: 0, totalBytes: null, percent: null }, promise: null, canceled: false, installStarted: false, stopPolling: null };
     activeUpdates.set(key, task);
     const emit = phase => { task.phase = phase; task.observers.forEach(listener => { try { listener(phase); } catch { /* Preserve installer flow. */ } }); };
+    const emitProgress = progress => { task.progress = progress; task.progressObservers.forEach(listener => { try { listener(progress); } catch { /* Progress cannot interrupt installation. */ } }); };
     task.promise = Promise.resolve().then(async () => {
-      const staged = validatePreparedUpdate(await request('/updates/prepare', { method: 'POST', body: JSON.stringify({ version: status.latestVersion }) }), status);
-      emit('install');
-      const result = await install(staged.spec, staged.version);
-      const value = { version: staged.version, result };
-      completedUpdates.set(key, value);
-      return value;
-    }).finally(() => activeUpdates.delete(key));
+      let stopped = false, timer;
+      task.stopPolling = () => { stopped = true; clearTimeout(timer); };
+      const assertActive = () => { if (task.canceled) throw Error('更新已取消：插件已停用或卸载，未请求安装。'); };
+      async function poll() {
+        try {
+          const progress = await request('/updates/progress');
+          if (!stopped && progress?.version === status.latestVersion && ['checking','downloading','verifying','ready'].includes(progress.phase)) emitProgress(progress);
+        } catch { /* Downloading must survive a missed progress response. */ }
+        if (!stopped) timer = setTimeout(poll, pollInterval);
+      }
+      try {
+        assertActive();
+        const preparing = request('/updates/prepare', { method: 'POST', body: JSON.stringify({ version: status.latestVersion }) });
+        void poll();
+        const staged = validatePreparedUpdate(await preparing, status);
+        assertActive();
+        task.stopPolling();
+        emit('install');
+        emitProgress({ ...task.progress, phase: 'install', percent: null });
+        // A synchronous observer can dispose the plugin while the stage changes.
+        assertActive();
+        task.installStarted = true;
+        const result = await install(staged.spec, staged.version);
+        const value = { version: staged.version, result };
+        completedUpdates.set(key, value);
+        emit('complete');
+        emitProgress({ ...task.progress, phase: 'complete', percent: 100 });
+        return value;
+      } catch (error) {
+        emitProgress({ ...task.progress, phase: task.canceled ? 'canceled' : 'error', percent: null });
+        throw error;
+      } finally { task.stopPolling(); }
+    }).finally(() => { if (activeUpdates.get(key) === task) activeUpdates.delete(key); });
   }
   if (typeof onPhase === 'function') { task.observers.add(onPhase); try { onPhase(task.phase); } catch { /* Observers cannot stop installation. */ } }
-  try { return await task.promise; } finally { task.observers.delete(onPhase); }
+  if (typeof onProgress === 'function') { task.progressObservers.add(onProgress); try { onProgress(task.progress); } catch { /* Observers cannot stop installation. */ } }
+  try { return await task.promise; } finally { task.observers.delete(onPhase); task.progressObservers.delete(onProgress); }
 }
+

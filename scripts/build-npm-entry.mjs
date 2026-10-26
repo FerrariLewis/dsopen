@@ -4,7 +4,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import { resolve, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { assertRepository, inspectTarball } from './release.mjs';
+import { assertRepository, inspectTarball, updateIdentityRepository } from './release.mjs';
 import { requirePackageReleaseNotes } from '../src/release-notes.js';
 
 export const NPM_PACKAGE_NAME = 'dsh-openup-lewis';
@@ -71,7 +71,7 @@ export async function buildNpmEntry({ tarball, out, repo }) {
   const client = files.get('lib/client.js')?.toString('utf8');
   if (!client?.startsWith(CLIENT_HEADER) || client.indexOf(CLIENT_HEADER, CLIENT_HEADER.length) !== -1) throw new Error('客户端 ModuleLoader 注册头与预期不符，拒绝盲目改写。');
   const manifest = { ...artifact.manifest, name: NPM_PACKAGE_NAME,
-    repository: { type: 'git', url: `git+https://github.com/${repo}.git` },
+    repository: { type: 'git', url: `git+https://github.com/${updateIdentityRepository(repo, NPM_PACKAGE_NAME)}.git` },
     homepage: `https://github.com/${repo}#readme`, bugs: { url: `https://github.com/${repo}/issues` },
     publishConfig: { access: 'public' },
     keywords: [...new Set([NPM_PACKAGE_NAME, ...(artifact.manifest.keywords ?? [])])],

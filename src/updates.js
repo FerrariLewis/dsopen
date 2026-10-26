@@ -13,6 +13,25 @@ export function updateManifestUrl(packageName, repo = UPDATE_REPOSITORY) {
 }
 const MAX_PACKAGE_BYTES = 80 * 1024 * 1024;
 const NPM_REGISTRIES = ['https://registry.npmjs.org', 'https://registry.npmmirror.com'];
+// A slow but progressing connection can finish a full media bundle. Connection
+// and idle deadlines still stop a stalled request promptly; the total deadline
+// bounds each registry attempt. These are not user-controlled network settings.
+export const UPDATE_DOWNLOAD_TIMEOUTS = Object.freeze({ connectMs: 20000, idleMs: 60000, totalMs: 15 * 60 * 1000 });
+
+function downloadBudget(timeouts = UPDATE_DOWNLOAD_TIMEOUTS) {
+  const controller = new AbortController();
+  let connectionTimer, idleTimer;
+  const abort = message => controller.abort(registryFailure(message));
+  const totalTimer = setTimeout(() => abort('更新包下载超过 15 分钟，请检查网络后重试。'), timeouts.totalMs);
+  const clear = timer => { if (timer) clearTimeout(timer); };
+  return {
+    signal: controller.signal,
+    connecting() { clear(connectionTimer); clear(idleTimer); connectionTimer = setTimeout(() => abort('连接更新下载服务超时。'), timeouts.connectMs); },
+    connected() { clear(connectionTimer); connectionTimer = null; this.touch(); },
+    touch() { clear(idleTimer); idleTimer = setTimeout(() => abort('更新包下载长时间没有进展，请检查网络后重试。'), timeouts.idleMs); },
+    dispose() { clear(totalTimer); clear(connectionTimer); clear(idleTimer); },
+  };
+}
 
 function repositoryMatches(value, repo) {
   const url = typeof value === 'string' ? value : value?.url;
@@ -25,13 +44,15 @@ function allowedRegistryURL(value) {
     (url.hostname === 'registry.npmjs.org' || url.hostname === 'registry.npmmirror.com' || url.hostname.endsWith('.npmmirror.com'));
 }
 /** Follow only npm registry/CDN redirects; never make a redirected GitHub request. */
-async function registryResponse(fetchImpl, input, signal) {
+async function registryResponse(fetchImpl, input, signal, budget) {
   let url = input;
   for (let hop = 0; hop < 5; hop++) {
     if (!allowedRegistryURL(url)) throw new Error('npm 更新请求离开了允许的注册表。');
     let response;
+    budget?.connecting();
     try { response = await fetchImpl(url, { signal, redirect: 'manual', headers: { accept: input.endsWith('.tgz') ? 'application/octet-stream' : 'application/json', 'user-agent': 'DSH-Open-Beauty-Updater' } }); }
-    catch (error) { throw registryFailure(error.name === 'TimeoutError' ? '连接 npm 注册表超时。' : '无法连接 npm 注册表。'); }
+    catch (error) { if (signal.aborted && signal.reason?.retryRegistry) throw signal.reason; throw registryFailure(error.name === 'TimeoutError' ? '连接 npm 注册表超时。' : '无法连接 npm 注册表。'); }
+    budget?.connected();
     if (![301, 302, 303, 307, 308].includes(response.status)) return response;
     const location = response.headers.get('location');
     await response.body?.cancel().catch(() => {});
@@ -40,9 +61,10 @@ async function registryResponse(fetchImpl, input, signal) {
   }
   throw new Error('npm 注册表跳转次数过多。');
 }
-async function registryBytes(response, limit, signal) {
-  try { return await responseBytes(response, limit, signal); }
+async function registryBytes(response, limit, signal, options) {
+  try { return await responseBytes(response, limit, signal, options); }
   catch (error) {
+    if (signal.aborted && signal.reason?.retryRegistry) throw signal.reason;
     if (signal.aborted || ['TimeoutError', 'AbortError', 'TypeError'].includes(error.name)) throw registryFailure('读取 npm 注册表内容失败。');
     throw error;
   }
@@ -74,17 +96,20 @@ async function npmManifest(fetchImpl, packageName, repo) {
   }
   throw failure;
 }
-async function npmArchive(fetchImpl, manifest) {
+async function npmArchive(fetchImpl, manifest, { onProgress, onVerifying, timeouts }) {
   let failure;
-  for (const url of manifest.tarballUrls) {
+  for (const [index, url] of manifest.tarballUrls.entries()) {
+    const budget = downloadBudget(timeouts);
     try {
-      const signal = AbortSignal.timeout(60000);
-      const response = await registryResponse(fetchImpl, url, signal);
-      if (!response.ok) throw registryFailure(`npm 更新包下载失败（HTTP ${response.status}）。`);
-      const bytes = await registryBytes(response, MAX_PACKAGE_BYTES, signal);
+      onProgress({ phase: 'downloading', downloadedBytes: 0, totalBytes: null, percent: null, attempt: index + 1 });
+      const response = await registryResponse(fetchImpl, url, budget.signal, budget);
+      if (!response.ok) { await response.body?.cancel().catch(() => {}); throw registryFailure(`npm 更新包下载失败（HTTP ${response.status}）。`); }
+      const bytes = await registryBytes(response, MAX_PACKAGE_BYTES, budget.signal, { onProgress, budget });
+      onVerifying(bytes.length);
       if ('sha512-' + createHash('sha512').update(bytes).digest('base64') !== manifest.integrity) throw new Error('npm 更新包 SHA-512 校验失败，未执行更新。');
       return bytes;
     } catch (error) { if (!error.retryRegistry) throw error; failure = error; }
+    finally { budget.dispose(); }
   }
   throw failure;
 }
@@ -150,22 +175,41 @@ export function readPackageManifest(tgz) {
   throw new Error('更新包中没有 package/package.json。');
 }
 
-async function responseBytes(response,limit,signal) {
-  const length=Number(response.headers.get('content-length'));
-  if(length>limit)throw new Error('维护文件超过允许大小。');
+function readWithSignal(reader, signal) {
+  if (signal.aborted) return Promise.reject(signal.reason || new Error('维护文件读取已中断。'));
+  return new Promise((resolve, reject) => {
+    const aborted = () => { signal.removeEventListener('abort', aborted); reject(signal.reason || new Error('维护文件读取已中断。')); };
+    signal.addEventListener('abort', aborted, { once: true });
+    reader.read().then(value => { signal.removeEventListener('abort', aborted); resolve(value); }, error => { signal.removeEventListener('abort', aborted); reject(error); });
+  });
+}
+
+async function responseBytes(response,limit,signal,{onProgress,budget,expectedBytes}={}) {
+  const rawLength = response.headers.get('content-length');
+  const parsedLength = rawLength && /^\d+$/.test(rawLength) ? Number(rawLength) : null;
+  const length = Number.isSafeInteger(parsedLength) && parsedLength > 0 ? parsedLength : null;
+  if(length>limit){await response.body?.cancel().catch(()=>{});throw new Error('维护文件超过允许大小。');}
   const reader=response.body?.getReader();
   if(!reader)throw new Error('维护文件内容为空。');
   const chunks=[];let size=0;
+  const totalBytes = length || expectedBytes || null;
+  const report = done => onProgress?.({ downloadedBytes: size, totalBytes: done ? size : totalBytes, percent: done ? 100 : totalBytes ? Math.min(99, Math.floor(size / totalBytes * 100)) : null });
+  report(false);
   try {
-    while(true){if(signal.aborted)throw new Error('维护文件读取超时。');const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>limit)throw new Error('维护文件超过允许大小。');chunks.push(Buffer.from(value));}
+    while(true){const {done,value}=await readWithSignal(reader,signal);if(done)break;budget?.touch();size+=value.byteLength;if(size>limit)throw new Error('维护文件超过允许大小。');chunks.push(Buffer.from(value));report(false);}
+    if (length && length !== size) throw registryFailure('更新包未完整下载，请检查网络后重试。');
+    report(true);
   } catch(error){await reader.cancel().catch(()=>{});throw error;}
   return Buffer.concat(chunks,size);
 }
 
 /** Only checks and stages verified files. Installation belongs to the owner's official Remote API. */
-export function createUpdateService({dataDir,packageFile,fetchImpl=fetch,repo=UPDATE_REPOSITORY,now=()=>Date.now(),manifestUrl}={}) {
+export function createUpdateService({dataDir,packageFile,fetchImpl=fetch,repo=UPDATE_REPOSITORY,now=()=>Date.now(),manifestUrl,downloadTimeouts=UPDATE_DOWNLOAD_TIMEOUTS}={}) {
   const cacheDir=join(dataDir,'update-cache');
   let checking=null,preparing=null,preparingVersion=null;
+  let snapshot = { version: null, phase: 'idle', downloadedBytes: 0, totalBytes: null, percent: null, attempt: 0 };
+  const progress = () => ({ ...snapshot });
+  const publish = patch => { snapshot = { ...snapshot, ...patch }; };
   async function identity(){const pkg=JSON.parse(await readFile(packageFile,'utf8'));versionParts(pkg.version);return {packageName:pkg.name,currentVersion:pkg.version};}
   async function check(){
     if(checking)return checking;
@@ -197,18 +241,26 @@ export function createUpdateService({dataDir,packageFile,fetchImpl=fetch,repo=UP
   async function prepare(requestedVersion){
     if(preparing){if(requestedVersion!==preparingVersion)throw Error('另一个版本正在准备，请稍后重新检查。');return preparing;}
     preparingVersion=requestedVersion;
+    snapshot = { version: requestedVersion, phase: 'checking', downloadedBytes: 0, totalBytes: null, percent: null, attempt: 0 };
     preparing=(async()=>{
       const status=await check();
       if(!status.channelReady||!status.available||status.latestVersion!==requestedVersion)throw new Error('更新版本已变化或尚未发布，请重新检查更新。');
       const manifest=status.manifest;
       let bytes;
-      if (manifest.source === 'npm') bytes = await npmArchive(fetchImpl, manifest);
+      const onVerifying = size => publish({ phase: 'verifying', downloadedBytes: size, totalBytes: size, percent: 100 });
+      if (manifest.source === 'npm') bytes = await npmArchive(fetchImpl, manifest, { onProgress: publish, onVerifying, timeouts: downloadTimeouts });
       else {
-        const signal=AbortSignal.timeout(120000);
-        const response=await fetchImpl(manifest.tarballUrl,{signal,headers:{'user-agent':'DSH-Open-Beauty-Updater'}});
-        if(!response.ok)throw new Error(`更新包下载失败（HTTP ${response.status}）。`);
-        bytes=await responseBytes(response,Math.min(MAX_PACKAGE_BYTES,manifest.bytes),signal);
-        if(bytes.length!==manifest.bytes||createHash('sha256').update(bytes).digest('hex')!==manifest.sha256)throw new Error('更新包 SHA-256 或大小校验失败，未执行更新。');
+        const budget = downloadBudget(downloadTimeouts);
+        try {
+          publish({ phase: 'downloading', downloadedBytes: 0, totalBytes: manifest.bytes, percent: 0, attempt: 1 });
+          budget.connecting();
+          const response=await fetchImpl(manifest.tarballUrl,{signal:budget.signal,headers:{'user-agent':'DSH-Open-Beauty-Updater'}});
+          budget.connected();
+          if(!response.ok){await response.body?.cancel().catch(()=>{});throw new Error(`更新包下载失败（HTTP ${response.status}）。`);}
+          bytes=await responseBytes(response,Math.min(MAX_PACKAGE_BYTES,manifest.bytes),budget.signal,{onProgress:publish,budget,expectedBytes:manifest.bytes});
+          onVerifying(bytes.length);
+          if(bytes.length!==manifest.bytes||createHash('sha256').update(bytes).digest('hex')!==manifest.sha256)throw new Error('更新包 SHA-256 或大小校验失败，未执行更新。');
+        } finally { budget.dispose(); }
       }
       const pkg=readPackageManifest(bytes);
       if(pkg.name!==status.packageName||pkg.version!==manifest.version||!pkg.dsh?.bundle?.patch)throw new Error('更新包的名称、版本或插件声明不匹配。');
@@ -220,9 +272,10 @@ export function createUpdateService({dataDir,packageFile,fetchImpl=fetch,repo=UP
       const path=join(cacheDir,`${pkg.name}-${pkg.version}-${sha256}.tgz`);
       const temp=join(cacheDir,`${randomUUID()}.part`);
       try{await writeFile(temp,bytes,{flag:'wx'});await rename(temp,path);}finally{await unlink(temp).catch(()=>{});}
+      publish({ phase: 'ready', downloadedBytes: bytes.length, totalBytes: bytes.length, percent: 100 });
       return {version:manifest.version,spec:path,sha256,requiresRestart:true};
     })();
-    try{return await preparing;}finally{preparing=null;preparingVersion=null;}
+    try{return await preparing;}catch(error){publish({phase:'error',error:error.message||'更新包准备失败。'});throw error;}finally{preparing=null;preparingVersion=null;}
   }
-  return {check,prepare,identity};
+  return {check,prepare,identity,progress};
 }

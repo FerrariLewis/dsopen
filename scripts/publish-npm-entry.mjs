@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isNewerVersion, readPackageManifest, validateUpdateManifest } from '../src/updates.js';
 import { requirePackageReleaseNotes } from '../src/release-notes.js';
+import { updateIdentityRepository } from './release.mjs';
 
 export const ENTRY_NAME = 'dsh-openup-lewis';
 const LIFECYCLES = ['preinstall', 'install', 'postinstall', 'prepare', 'preprepare', 'postprepare', 'prepublish', 'prepublishOnly', 'prepack', 'postpack', 'postpublish'];
@@ -56,12 +57,15 @@ export function parseStageReceipt(stdout) {
 export async function stageNpmEntry({ metadata, archive, repo, sourceCommit, fetchImpl = fetch, stageImpl }) {
   assertRepo(repo);
   assertSourceCommit(metadata, sourceCommit);
-  const update = validateUpdateManifest(metadata, { packageName: ENTRY_NAME, repo });
+  const identityRepo = updateIdentityRepository(repo, ENTRY_NAME);
+  const registryMatches = value => repositoryMatches(value, identityRepo) ||
+    (repo === 'FerrariLewis/dsopen' && repositoryMatches(value, repo));
+  const update = validateUpdateManifest(metadata, { packageName: ENTRY_NAME, repo: identityRepo });
   if (archive.length !== update.bytes || createHash('sha256').update(archive).digest('hex') !== update.sha256) throw Error('npm 暂存包大小或 SHA-256 与 Release 清单不一致。');
   const manifest = readPackageManifest(archive);
   if (requirePackageReleaseNotes(manifest) !== update.releaseNotes) throw Error('npm 暂存包的作者更新说明与 Release 清单不一致，未执行暂存。');
   if (manifest.name !== ENTRY_NAME || manifest.version !== update.version || !manifest.dsh?.bundle?.patch) throw Error('npm 暂存包名称、版本或 bundle 声明不符。');
-  if (!repositoryMatches(manifest.repository, repo)) throw Error('npm 暂存包的 repository 与当前 GitHub 仓库不一致。');
+  if (!repositoryMatches(manifest.repository, identityRepo)) throw Error('npm 暂存包的 repository 与兼容更新身份不一致。');
   if (LIFECYCLES.some(name => manifest.scripts?.[name])) throw Error('npm 暂存包包含安装或发布生命周期脚本。');
   if (['dependencies', 'optionalDependencies', 'peerDependencies'].some(key => Object.keys(manifest[key] ?? {}).length)) throw Error('短名称安装包必须独立运行，不能引入入口依赖。');
   const integrity = 'sha512-' + createHash('sha512').update(archive).digest('base64');
@@ -71,10 +75,10 @@ export async function stageNpmEntry({ metadata, archive, repo, sourceCommit, fet
   if (response.status === 404) throw Error(`npm 尚不存在 ${ENTRY_NAME}。请先完成首次发布并配置该包的 GitHub Trusted Publisher；此工作流不会代替首次账户授权。`);
   const registry = await registryDocument(response);
   const latest = registry.versions?.[registry['dist-tags']?.latest];
-  if (registry.name !== ENTRY_NAME || !repositoryMatches(registry.repository ?? latest?.repository, repo)) throw Error('npm 上的同名包不属于此 GitHub 项目，拒绝暂存。');
+  if (registry.name !== ENTRY_NAME || !registryMatches(registry.repository ?? latest?.repository)) throw Error('npm 上的同名包不属于此 GitHub 项目，拒绝暂存。');
   const existing = registry.versions?.[update.version];
   if (existing) {
-    if (!repositoryMatches(existing.repository, repo) || !String(existing.dist?.integrity ?? '').split(/\s+/).includes(integrity)) throw Error('npm 已存在同版本但内容不同，拒绝覆盖；请提高版本号。');
+    if (!registryMatches(existing.repository) || !String(existing.dist?.integrity ?? '').split(/\s+/).includes(integrity)) throw Error('npm 已存在同版本但内容不同，拒绝覆盖；请提高版本号。');
     return { state: 'already-published', version: update.version, message: `npm ${ENTRY_NAME}@${update.version} 已公开且内容一致，已跳过重复暂存。` };
   }
   if (registry['dist-tags']?.latest === '0.0.0-stage') throw Error('npm 包仍处于首次暂存引导状态；请先在 npm 官网完成首次批准，再使用自动更新工作流。');

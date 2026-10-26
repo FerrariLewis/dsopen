@@ -26,6 +26,15 @@ export function assertRepository(repo) {
   return repo;
 }
 
+// The same repository (GitHub id 1431878518) was renamed. Existing clients
+// compare this exact identity before downloading; redirects alone cannot change
+// that comparison. Keep the legacy identity only for these two package names.
+export function updateIdentityRepository(repo, packageName) {
+  assertRepository(repo);
+  return repo === 'FerrariLewis/dsopen' && ['dsh-boot-studio', NPM_ENTRY_NAME].includes(packageName)
+    ? 'FerrariLewis/open' : repo;
+}
+
 export function assertVersionAdvance(manifest, previous) {
   compareVersions(manifest.version, manifest.version);
   if (!previous) return;
@@ -43,11 +52,12 @@ export function buildUpdate({ manifest, repo, commit, sourceCommit = commit, pub
   if (!/^[a-f0-9]{64}$/.test(sha256 ?? '')) throw new Error('SHA-256 必须是64位小写十六进制。');
   if (!/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(manifest.name ?? '')) throw new Error('包名无效。');
   const basename = `${manifest.name.replace('/', '-')}-${manifest.version}.tgz`;
+  const updateRepo = updateIdentityRepository(repo, manifest.name);
   return {
     format: 1, packageName: manifest.name, version: manifest.version,
     commit, sourceCommit, publishTimestamp, sha256, bytes,
-    tarballUrl: `https://github.com/${repo}/releases/download/v${manifest.version}/${basename}`,
-    releaseNotesUrl: `https://github.com/${repo}/releases/tag/v${manifest.version}`,
+    tarballUrl: `https://github.com/${updateRepo}/releases/download/v${manifest.version}/${basename}`,
+    releaseNotesUrl: `https://github.com/${updateRepo}/releases/tag/v${manifest.version}`,
     releaseNotes: { version: manifest.version, notes },
     requiresRestart: true,
   };

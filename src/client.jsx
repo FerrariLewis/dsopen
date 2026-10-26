@@ -4,7 +4,7 @@ import { WHALE_PATH } from './logo-path.js';
 import { StartupSequence } from './startup-screen.jsx';
 import { UpdatePanel } from './update-panel.jsx';
 import { UpdatePrompt } from './update-prompt.jsx';
-import { startupUpdateSession, isAvailableUpdate } from './startup-update.js';
+import { startupUpdateSession, isAvailableUpdate, cancelPendingUpdates } from './startup-update.js';
 import { getShortcutRegistry } from './shortcut-registry.js';
 import { ResetDialog } from './reset-dialog.jsx';
 import { AuthorDialog } from './author-dialog.jsx';
@@ -20,7 +20,7 @@ let launchDecisionSettled = false;
 let latestState = null;
 const subscribers = new Set();
 const playerWindows = new WeakMap();
-const VERSION = typeof __DSH_LEWIS_VERSION__ === 'string' ? __DSH_LEWIS_VERSION__ : '1.2.9';
+const VERSION = typeof __DSH_LEWIS_VERSION__ === 'string' ? __DSH_LEWIS_VERSION__ : '1.2.10';
 
 // A marker for Harness's optional HTML menu only. Native caption buttons are
 // owned by the desktop host; this lease never changes the native window state.
@@ -41,7 +41,7 @@ function acquirePlayerWindow(doc) {
 
 export async function api(path, options = {}) {
   const controller = new AbortController();
-  const timeout=['/upload','/end-images','/updates/prepare','/reset'].includes(path)?180000:path==='/updates/check'?20000:7000;
+  const timeout=path==='/updates/prepare'?35*60*1000:['/upload','/end-images','/reset'].includes(path)?180000:path==='/updates/check'?20000:7000;
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
     const response = await fetch(BASE + path, { ...options, signal: controller.signal,
@@ -187,7 +187,7 @@ export function Player({ clip, settings = {}, onClose, endOnly = false, clipOnly
 function Toggle({ label, description, checked, onChange, disabled }) {
   return <label className="bs-toggle-row"><span><strong>{label}</strong>{description && <small>{description}</small>}</span><input type="checkbox" role="switch" checked={checked} onChange={e => onChange(e.target.checked)} disabled={disabled}/><span className="bs-switch" aria-hidden="true"/></label>;
 }
-export function SettingsPanel({ standalone = false }) {
+export function SettingsPanel({ standalone = false, updateTools }) {
   useStyles();
   const appearance = useEnchantAppearance();
   const [state, setState] = useState(latestState);
@@ -333,7 +333,7 @@ export function SettingsPanel({ standalone = false }) {
         <Toggle label="播放声音" checked={settings.sound} disabled={busy} onChange={sound=>save({sound})}/>
         <Toggle label="随机开场" checked={settings.shuffle} disabled={busy} onChange={shuffle=>save({shuffle})}/>
       </div>
-      <UpdatePanel request={api} standalone={standalone}/>
+      <UpdatePanel request={api} standalone={standalone} {...updateTools}/>
       <div className="bs-section-title bs-entry-title"><h2>进入方式</h2></div>
       <div className="bs-preferences"><Toggle label="显示侧栏快捷入口" description="在头像上方显示“开机动画”；关闭后仍可从设置进入。附魔台系列最多显示17个快捷入口。" checked={settings.showShortcut??false} disabled={busy} onChange={showShortcut=>save({showShortcut})}/></div>
       <div className="bs-reset-area"><div><strong>恢复默认</strong><p>重置所有设置，永久删除全部上传的视频和图片，仅保留内置素材。</p></div><button className="bs-reset-open" type="button" disabled={busy} onClick={()=>setResetOpened(true)}>恢复默认</button></div>
@@ -428,7 +428,7 @@ export function apply(ctx) {
       ready.slots.inject('shell.overlay',()=>ready.slots.register({name:'shell.overlay',id:'dsh-boot-studio-overlay',order:950},()=>React.createElement(BootRoot)));
       ready.slots.inject('settings.section',()=>bindSettingsEntry({slots:ready.slots,registry,pluginId:'dsh-openup-lewis',register:()=>ready.slots.register({name:'settings.section',id:'dsh-boot-studio-settings',order:80,label:()=> '开机动画'},()=>React.createElement(SettingsPanel))}));
       ready.slots.inject('sidebar.footer.action',()=>ready.slots.register({name:'sidebar.footer.action',id:'dsh-boot-studio-shortcut',order:42,label:()=> '开机动画'},()=>React.createElement(ShortcutAction)));
-      return unregister;
+      return () => { cancelPendingUpdates(); unregister(); };
       } catch (error) { unregister(); throw error; }
     };
     if(typeof ready.effect==='function')return ready.effect(register,'dsh-boot-studio: slots');else return register();
