@@ -1,6 +1,7 @@
 /** MIT, Copyright (c) 2026 沈宏宏. See ./LICENSE.
  * Original: 6shenhonghong9/dsh-startup-screen@8ec3132e69f0906b3ed2f7eb083b1035cd69c1d4
- * Original runtime is unchanged except its outer IIFE becomes this injected factory.
+ * Adapted with an injected runtime surface and live localized display text.
+ * The untouched upstream runtime is preserved in splash.js and source.js.
  */
 /* ============================================================================
  * dsh-startup-screen — 启动动画运行时（浏览器端，零依赖）
@@ -21,6 +22,7 @@
 export function mountStartupRuntime(environment) {
   // Inject an isolated DOM/window/timer surface without changing the sequence.
   const { window, document, setTimeout, clearTimeout, setInterval, clearInterval, requestAnimationFrame, cancelAnimationFrame, fetch } = environment;
+  const translate = environment.translate || ((zh) => zh);
   'use strict'
 
   if (window.__DSH_STARTUP_LOADED__) return
@@ -284,7 +286,7 @@ export function mountStartupRuntime(environment) {
     for (var i = 0; i < text.length; i++) {
       var ch = text.charAt(i)
       if (ch === ' ') {
-        frag.appendChild(document.createTextNode('\u00a0'))
+        frag.appendChild(document.createTextNode(translate('zh', 'en') === 'en' ? ' ' : '\u00a0'))
         continue
       }
       var s = el('span', 'dsu-ch', ch)
@@ -315,6 +317,18 @@ export function mountStartupRuntime(environment) {
   root.style.setProperty('--dsu-glitch-b', C.glitchB)
 
   var ui = {}
+  // Refresh only display text when the host language changes. The timeline,
+  // pending waits, audio and interaction state continue without a remount.
+  var localizedBindings = new Map()
+  function localizedText(node, zh, en, stagger, html) {
+    var render = function () {
+      if (html) node.innerHTML = translate(zh, en)
+      else node.textContent = translate(zh, en)
+    }
+    localizedBindings.set(node, render)
+    if (typeof stagger === 'number') typeIn(node, translate(zh, en), stagger)
+    else render()
+  }
   var clockTimer = null
   var html =
     '<div class="dsu-plate"></div>' +
@@ -435,14 +449,16 @@ export function mountStartupRuntime(environment) {
   ui.brand3s.textContent = C.brand3b
   ui.footText.textContent = C.footer
   ui.w2.textContent = C.welcomeBox
-  ui.w4.textContent = '欢迎 ' + C.identity + ' 访问'
+  localizedText(ui.w4, '欢迎 ' + C.identity + ' 访问', 'WELCOME, ' + C.identity)
   ui.idline.textContent = '· ID CONFIRMED : ' + C.identityId
 
   ;(function blackStage() {
     var inner = ui.blackInner
     var whale = svgWhale('dsu-whale')
     inner.appendChild(whale)
-    inner.appendChild(el('div', 'dsu-black-zh', C.orgZh))
+    var org = el('div', 'dsu-black-zh')
+    localizedText(org, C.orgZh, C.orgEn)
+    inner.appendChild(org)
     var en = el('div', 'dsu-black-en', C.orgEn)
     inner.appendChild(en)
     inner.appendChild(el('div', 'dsu-black-sub', C.orgSub))
@@ -632,7 +648,7 @@ export function mountStartupRuntime(environment) {
     ui.subZh.classList.remove('dsu-in')
     ui.subEn2.classList.remove('dsu-in')
     setTimeout(function () {
-      ui.subZh.textContent = zh || ''
+      localizedText(ui.subZh, zh || '', en || '')
       ui.subEn2.textContent = en || ''
       ui.subZh.classList.add('dsu-in')
       if (en) ui.subEn2.classList.add('dsu-in')
@@ -1170,7 +1186,7 @@ export function mountStartupRuntime(environment) {
         ui.status.classList.remove('dsu-in')
         ui.subEn.classList.remove('dsu-in')
         void ui.status.offsetWidth
-        typeIn(ui.statusZh, step.zh, 46)
+        localizedText(ui.statusZh, step.zh, step.en, 46)
         typeIn(ui.subEn, step.en, 13)
         ui.caret.classList.toggle('dsu-on', !!step.action && step.action !== 'auto')
         requestAnimationFrame(function () {
@@ -1243,25 +1259,27 @@ export function mountStartupRuntime(environment) {
   }
 
   function showAction(step) {
-    ui.btnZh.textContent = step.btnZh
+    localizedText(ui.btnZh, step.btnZh, step.btnEn)
     ui.btnEn.textContent = step.btnEn
     ui.card.hidden = step.action !== 'confirm'
     if (step.action === 'confirm') {
       ui.card.innerHTML = ''
       /* 纯中文标签 + 数字/名称，去掉英文双写与主机行，别堆信息 */
       var rows = [
-        ['身份名称', C.identity, true],
-        ['身份编号', C.identityId, false],
-        ['权限等级', C.accessLevel, false]
+        ['身份名称', C.identity, true, 'IDENTITY NAME'],
+        ['身份编号', C.identityId, false, 'IDENTITY ID'],
+        ['权限等级', C.accessLevel, false, 'ACCESS LEVEL']
       ]
       rows.forEach(function (r) {
         var row = el('div', 'dsu-card-row')
-        row.appendChild(el('span', null, r[0]))
+        var label = el('span')
+        localizedText(label, r[0], r[3])
+        row.appendChild(label)
         row.appendChild(el('b', r[2] ? 'dsu-zhname' : null, r[1]))
         ui.card.appendChild(row)
       })
     }
-    ui.hint.innerHTML = '按 <kbd>Enter</kbd> / <kbd>Space</kbd>，或点击按钮继续'
+    localizedText(ui.hint, '按 <kbd>Enter</kbd> / <kbd>Space</kbd>，或点击按钮继续', 'Press <kbd>Enter</kbd> / <kbd>Space</kbd>, or click to continue', undefined, true)
     ui.action.classList.add('dsu-in')
     ui.btn.classList.add('dsu-pulse')
   }
@@ -1400,6 +1418,13 @@ export function mountStartupRuntime(environment) {
   if (document.body) document.body.style.overflow = 'hidden'
   setProgress(0.05)
   root.classList.remove('dsu-boot')
+
+  function refreshLocale() {
+    root.lang = translate('zh-CN', 'en')
+    localizedBindings.forEach(function (render) { render() })
+  }
+  root.lang = translate('zh-CN', 'en')
+  environment.subscribeLocale?.(refreshLocale)
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () { run() })

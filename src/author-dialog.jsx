@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useEnchantAppearance } from './enchant-theme.jsx';
 import { useStudioStyles } from './studio-styles.jsx';
 import { CloseIcon } from './close-icon.jsx';
+import { useI18n } from './i18n.jsx';
 
 export function AuthorDialog({ settings = {}, onClose }) {
+  const t = useI18n();
   useStudioStyles();
   const appearance = useEnchantAppearance();
   const dialog = useRef(null);
@@ -25,10 +27,10 @@ export function AuthorDialog({ settings = {}, onClose }) {
     const rect = event.currentTarget.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onClose();
   }
-  return <dialog ref={dialog} className="bs-startup-update bs-author-dialog" data-testid="author-dialog" {...appearance} aria-label="作者图片" onCancel={event => { event.preventDefault(); onClose(); }} onClick={backdropClick}>
+  return <dialog ref={dialog} className="bs-startup-update bs-author-dialog" data-testid="author-dialog" {...appearance} aria-label={t('作者图片', 'Author image')} onCancel={event => { event.preventDefault(); onClose(); }} onClick={backdropClick}>
     <div className="bs-startup-update-card bs-author-card">
-      <button ref={closeButton} className="bs-startup-update-close" type="button" aria-label="关闭作者信息" onClick={onClose}><CloseIcon/></button>
-      {imageFailed ? <span className="bs-visually-hidden" role="alert">图片暂时无法显示，请关闭后重试。</span> : <div className="bs-author-image-frame"><img className="bs-author-image" src="/dsh-boot-studio/author-image" alt="作者提供的微信收款码" onError={() => setImageFailed(true)}/></div>}
+      <button ref={closeButton} className="bs-startup-update-close" type="button" aria-label={t('关闭作者信息', 'Close author information')} onClick={onClose}><CloseIcon/></button>
+      {imageFailed ? <span className="bs-visually-hidden" role="alert">{t('图片暂时无法显示，请关闭后重试。', 'The image is unavailable. Close this dialog and try again.')}</span> : <div className="bs-author-image-frame"><img className="bs-author-image" src="/dsh-boot-studio/author-image" alt={t('作者提供的微信收款码', 'WeChat payment QR code provided by the author')} onError={() => setImageFailed(true)}/></div>}
     </div>
   </dialog>;
 }

@@ -7,7 +7,7 @@ import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildIndex } from './generate-index.mjs';
 import { NPM_ENTRY_NAME } from '../src/updates.js';
-import { requirePackageReleaseNotes, validateReleaseNotes } from '../src/release-notes.js';
+import { requirePackageReleaseNotes, validateReleaseNotes, packageReleaseNotesEn } from '../src/release-notes.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SHA = /^[a-f0-9]{40}$/;
@@ -43,7 +43,8 @@ export function assertVersionAdvance(manifest, previous) {
 }
 
 export function buildUpdate({ manifest, repo, commit, sourceCommit = commit, publishTimestamp, bytes, sha256 }) {
-  const notes = requirePackageReleaseNotes(manifest);
+  const notes = requirePackageReleaseNotes(manifest, { bilingual: true });
+  const notesEn = packageReleaseNotesEn(manifest);
   assertRepository(repo);
   compareVersions(manifest.version, manifest.version);
   if (!SHA.test(commit ?? '') || !SHA.test(sourceCommit ?? '')) throw new Error('发布提交和源码提交必须是完整的 40 位小写 SHA。');
@@ -59,6 +60,7 @@ export function buildUpdate({ manifest, repo, commit, sourceCommit = commit, pub
     tarballUrl: `https://github.com/${updateRepo}/releases/download/v${manifest.version}/${basename}`,
     releaseNotesUrl: `https://github.com/${updateRepo}/releases/tag/v${manifest.version}`,
     releaseNotes: { version: manifest.version, notes },
+    ...(notesEn === null ? {} : { releaseNotesEn: { version: manifest.version, notes: notesEn } }),
     requiresRestart: true,
   };
 }
@@ -71,7 +73,7 @@ export async function inspectTarball(tarball) {
   if (!files.every(file => file.startsWith('package/') && !file.split('/').includes('..') && !file.includes('\\'))) throw new Error('安装包包含不安全路径。');
   const raw = execFileSync(tar, ['-xOf', path, 'package/package.json'], { encoding: 'utf8', maxBuffer: 128 * 1024 });
   const manifest = JSON.parse(raw);
-  requirePackageReleaseNotes(manifest);
+  requirePackageReleaseNotes(manifest, { bilingual: true });
   const required = ['package/lib/client.js', 'package/lib/index.js', 'package/lib/release-notes.js', 'package/cordis.patch.yml'];
   if (compareVersions(manifest.version, '1.2.7') >= 0) required.push('package/assets/author/author.jpg', 'package/assets/deepseek-whale-girl-intro.mp4', 'package/assets/deepsea-notices/LICENSE', 'package/assets/deepsea-notices/LICENSE-ARTWORK.md', 'package/assets/deepsea-notices/NOTICE-ARTWORK.md', 'package/assets/deepsea-notices/ADAPTATION.md');
   if (compareVersions(manifest.version, '1.2.9') >= 0) required.push(
@@ -91,6 +93,7 @@ export function assertExistingRelease(expected, existing) {
     if (existing[key] !== expected[key]) throw new Error(`已有 v${expected.version} 的 ${key} 与本次构建不符，拒绝覆盖不可变版本。请提高版本号。`);
   }
   if (validateReleaseNotes(existing.releaseNotes, existing.version, { required: true }) !== validateReleaseNotes(expected.releaseNotes, expected.version, { required: true })) throw new Error('已有版本的作者更新说明与本次不一致，拒绝覆盖不可变版本。');
+  if (validateReleaseNotes(existing.releaseNotesEn, existing.version) !== validateReleaseNotes(expected.releaseNotesEn, expected.version)) throw new Error('已有版本的英文更新说明与本次不一致，拒绝覆盖不可变版本。');
   return existing.commit;
 }
 
@@ -126,7 +129,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (!args.tarball) throw new Error('请指定 --tarball。');
   const artifact = await inspectTarball(args.tarball);
   const current = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
-  if (requirePackageReleaseNotes(current) !== requirePackageReleaseNotes(artifact.manifest)) throw new Error('实际安装包的作者更新说明与当前 package.json 不一致。请重新构建打包。');
+  if (requirePackageReleaseNotes(current, { bilingual: true }) !== requirePackageReleaseNotes(artifact.manifest, { bilingual: true }) || packageReleaseNotesEn(current) !== packageReleaseNotesEn(artifact.manifest)) throw new Error('实际安装包的作者更新说明与当前 package.json 不一致。请重新构建打包。');
   for (const key of ['name', 'version']) if (current[key] !== artifact.manifest[key]) throw new Error(`实际安装包 ${key} 与当前 package.json 不一致。请重新构建打包。`);
   const repo = assertRepository(args.repo);
   const previous = args.previous === 'none' ? null : args.previous ? JSON.parse(await readFile(resolve(args.previous), 'utf8')) : await previousFromChannel(repo);
@@ -146,6 +149,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (args['npm-tarball']) {
     npmArtifact = await inspectTarball(args['npm-tarball']);
     if (npmArtifact.manifest.name !== NPM_ENTRY_NAME || npmArtifact.manifest.version !== artifact.manifest.version) throw new Error('npm 短名称包的名称或版本与本次发布不一致。');
+    if (requirePackageReleaseNotes(npmArtifact.manifest, { bilingual: true }) !== requirePackageReleaseNotes(artifact.manifest, { bilingual: true }) || packageReleaseNotesEn(npmArtifact.manifest) !== packageReleaseNotesEn(artifact.manifest)) throw new Error('npm 短名称包的中英文更新说明与核心包不一致。');
     npmUpdate = buildUpdate({ ...npmArtifact, repo, commit: update.sourceCommit, sourceCommit: update.sourceCommit, publishTimestamp });
     if (args['existing-npm']) assertExistingRelease(npmUpdate, JSON.parse(await readFile(resolve(args['existing-npm']), 'utf8')));
   }
@@ -160,7 +164,8 @@ export async function main(argv = process.argv.slice(2)) {
   await writeFile(join(out, 'plugin-index.json'), JSON.stringify(index, null, 2) + '\n');
   await writeFile(join(out, 'SHA256SUMS.txt'), `${artifact.sha256}  ${artifact.manifest.name.replace('/', '-')}-${artifact.manifest.version}.tgz\n` + (npmArtifact ? `${npmArtifact.sha256}  ${NPM_ENTRY_NAME}-${npmArtifact.manifest.version}.tgz\n${npmArtifact.sha256}  ${NPM_ENTRY_NAME}.tgz\n` : ''));
   const highlights = requirePackageReleaseNotes(artifact.manifest);
-  await writeFile(join(out, 'release-notes.md'), `DSH LEWIS ENCHANTMENT · 附魔台｜开机动画 ${update.version}\n\n${highlights}\n\n使用插件设置中的检查更新进行原位升级，无需先卸载。升级后重新打开 Harness。个人视频、图片和播放偏好保留。\n\n源码提交：${update.sourceCommit}\n构建提交：${update.commit}\nSHA-256：${update.sha256}\n`);
+  const highlightsEn = packageReleaseNotesEn(artifact.manifest);
+  await writeFile(join(out, 'release-notes.md'), `DSH LEWIS ENCHANTMENT · 附魔台｜开机动画 ${update.version}\n\n${highlights}${highlightsEn === null ? '' : `\n\nEnglish:\n${highlightsEn}`}\n\n使用插件设置中的检查更新进行原位升级，无需先卸载。升级后重新打开 Harness。个人视频、图片和播放偏好保留。\n\n源码提交：${update.sourceCommit}\n构建提交：${update.commit}\nSHA-256：${update.sha256}\n`);
   console.log(`Release metadata verified: ${update.packageName}@${update.version}\nDistribution commit: ${update.commit}\nImmutable tarball: ${update.tarballUrl}\nOutput: ${out}`);
 }
 

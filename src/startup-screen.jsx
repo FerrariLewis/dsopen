@@ -6,6 +6,8 @@
 import React, { useEffect, useRef } from 'react';
 import { STARTUP_CSS } from '../assets/startup-screen/source.js';
 import { mountStartupRuntime } from '../assets/startup-screen/adapted-runtime.js';
+import { translate } from './i18n.js';
+import { getHostLocaleStore } from './host-locale.js';
 
 /** Mount the actual upstream sequence and return a synchronous disposer. */
 export function mountStartupSequence(container, { sound = false, volume = 0.7, onEnded } = {}) {
@@ -13,7 +15,13 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
   const realWindow = realDocument.defaultView;
   const shadow = container.shadowRoot ?? container.attachShadow({ mode: 'open' });
   const style = realDocument.createElement('style');
-  style.textContent = STARTUP_CSS;
+  style.textContent = STARTUP_CSS + `
+    #dsh-startup-root[lang="en"] .dsu-status.dsu-zhline {
+      font-family: var(--dsu-din); font-size: clamp(15px, 2.8vw, 32px);
+      letter-spacing: .04em; text-indent: .04em; white-space: normal;
+      max-width: 86vw; text-align: center; justify-content: center;
+    }
+  `;
   const body = realDocument.createElement('div');
   body.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:hidden;background:#000;';
   shadow.replaceChildren(style, body);
@@ -79,6 +87,12 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
   };
   const environment = {
     window: localWindow, document: localDocument,
+    translate,
+    subscribeLocale(listener) {
+      const unsubscribe = getHostLocaleStore(realDocument).subscribe(listener);
+      listeners.push(unsubscribe);
+      return unsubscribe;
+    },
     setTimeout(callback, delay, ...args) {
       if (disposed) return 0;
       const id = realWindow.setTimeout(() => { timers.delete(id); if (!disposed) callback(...args); }, delay);

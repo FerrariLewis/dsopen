@@ -1,9 +1,11 @@
 import React,{useEffect,useState} from 'react';
 import { isAvailableUpdate, startupUpdateSession } from './startup-update.js';
 import { UpdatePrompt } from './update-prompt.jsx';
+import { useI18n } from './i18n.jsx';
 export { installVerifiedUpdate, prepareAndInstallUpdate } from './startup-update.js';
 
 export function UpdatePanel({request,standalone=false,install}) {
+  const t = useI18n();
   const [status,setStatus]=useState(null);
   const [busy,setBusy]=useState(false);
   const [prompt,setPrompt]=useState(null);
@@ -23,9 +25,9 @@ export function UpdatePanel({request,standalone=false,install}) {
     setStatus(value=>({...value,available:false,currentVersion:version}));
   }
   return <div className="bs-update-area" data-testid="update-panel">
-    <div className="bs-section-title"><h2>版本与更新</h2><span>{status?.currentVersion?`v${status.currentVersion}`:'DSH LEWIS ENCHANTMENT'}</span></div>
-      <div className="bs-update-card"><div><strong>一次安装，持续焕新</strong><p>更新会保留你的视频、结束图片和播放偏好。</p>{standalone&&<small>当前为独立预览，检查结果仅用于展示。</small>}</div>
-        <div className="bs-update-actions"><button type="button" disabled={busy} onClick={check}>{busy?'正在检查…':isAvailableUpdate(status)?'查看更新':status?.channelReady?'已是最新':'检查更新'}</button></div>
+    <div className="bs-section-title"><h2>{t('版本与更新', 'Version and updates')}</h2><span>{status?.currentVersion?`v${status.currentVersion}`:'DSH LEWIS ENCHANTMENT'}</span></div>
+      <div className="bs-update-card"><div><strong>{t('一次安装，持续焕新', 'Install once, keep it fresh')}</strong><p>{t('更新会保留你的视频、结束图片和播放偏好。', 'Updates keep your videos, end screen images and playback preferences.')}</p>{standalone&&<small>{t('当前为独立预览，检查结果仅用于展示。', 'This is a standalone preview. Update results are for display only.')}</small>}</div>
+        <div className="bs-update-actions"><button type="button" disabled={busy} onClick={check}>{busy?t('正在检查…', 'Checking…'):isAvailableUpdate(status)?t('查看更新', 'View update'):status?.channelReady?t('已是最新', 'Up to date'):t('检查更新', 'Check for updates')}</button></div>
       </div>
     {prompt&&<UpdatePrompt request={request} status={prompt.status} kind={prompt.kind} checkError={prompt.message} install={install} preview={standalone&&prompt.kind==='update'&&!install} onDismiss={()=>setPrompt(null)} onUpdated={updated}/ >}
   </div>;

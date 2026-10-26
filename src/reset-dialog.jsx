@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useEnchantAppearance } from './enchant-theme.jsx';
 import { useStudioStyles } from './studio-styles.jsx';
 import { CloseIcon } from './close-icon.jsx';
+import { useI18n, localizeMessage } from './i18n.jsx';
 
 /** Confirmation only: the parent owns the authenticated reset request. */
 export function ResetDialog({ settings = {}, onCancel, onConfirm }) {
+  const t = useI18n();
   useStudioStyles();
   const appearance = useEnchantAppearance();
   const dialog = useRef(null);
@@ -48,23 +50,23 @@ export function ResetDialog({ settings = {}, onCancel, onConfirm }) {
   }
   return <dialog ref={dialog} className="bs-startup-update bs-reset-dialog" data-testid="reset-dialog" {...appearance} aria-labelledby="bs-reset-title" aria-describedby="bs-reset-description bs-reset-warning" aria-busy={busy} onCancel={event => { event.preventDefault(); cancel(); }}>
     <div className="bs-startup-update-card bs-reset-card">
-      <button className="bs-startup-update-close" type="button" aria-label="取消恢复默认" disabled={busy} onClick={cancel}><CloseIcon/></button>
+      <button className="bs-startup-update-close" type="button" aria-label={t('取消恢复默认', 'Cancel reset')} disabled={busy} onClick={cancel}><CloseIcon/></button>
       <div className="bs-startup-update-glyph bs-reset-glyph" aria-hidden="true">↺</div>
       <p className="bs-startup-update-brand">DSH LEWIS ENCHANTMENT</p>
-      <h2 id="bs-reset-title">回到最初的开场？</h2>
-      <p id="bs-reset-description" className="bs-startup-update-copy">恢复默认后，开机动画将回到安装时的状态。</p>
+      <h2 id="bs-reset-title">{t('回到最初的开场？', 'Back to the original opening?')}</h2>
+      <p id="bs-reset-description" className="bs-startup-update-copy">{t('恢复默认后，开机动画将回到安装时的状态。', 'Reset the startup animation to its original settings.')}</p>
       <div className="bs-startup-update-summary bs-reset-summary">
-        <p>删除全部上传的视频和图片</p>
-        <p>重置播放、声音及结束画面等偏好</p>
-        <p>重置侧栏快捷入口</p>
+        <p>{t('删除全部上传的视频和图片', 'Delete all uploaded videos and images')}</p>
+        <p>{t('重置播放、声音及结束画面等偏好', 'Reset playback, sound and end screen preferences')}</p>
+        <p>{t('重置侧栏快捷入口', 'Reset the sidebar shortcut')}</p>
       </div>
-      <p className="bs-startup-update-retain bs-reset-retain">安装包自带的动画和封面会保留。</p>
-      <p id="bs-reset-warning" className="bs-reset-warning">此操作不可撤销，请先备份需要保留的素材。</p>
-      {busy && <p className="bs-startup-update-status" role="status" aria-live="polite">正在移除自定义素材并恢复默认…</p>}
-      {error && <p className="bs-startup-update-error" role="alert">{error}</p>}
+      <p className="bs-startup-update-retain bs-reset-retain">{t('安装包自带的动画和封面会保留。', 'Built-in animations and covers will be kept.')}</p>
+      <p id="bs-reset-warning" className="bs-reset-warning">{t('此操作不可撤销，请先备份需要保留的素材。', 'This cannot be undone. Back up any media you want to keep first.')}</p>
+      {busy && <p className="bs-startup-update-status" role="status" aria-live="polite">{t('正在移除自定义素材并恢复默认…', 'Removing custom media and restoring defaults…')}</p>}
+      {error && <p className="bs-startup-update-error" role="alert">{localizeMessage(error)}</p>}
       <div className="bs-startup-update-actions bs-reset-actions">
-        <button ref={cancelButton} type="button" autoFocus disabled={busy} onClick={cancel}>取消</button>
-        <button className="bs-reset-confirm" type="button" disabled={busy} onClick={confirm}>{busy ? '正在恢复…' : '确认恢复默认'}</button>
+        <button ref={cancelButton} type="button" autoFocus disabled={busy} onClick={cancel}>{t('取消', 'Cancel')}</button>
+        <button className="bs-reset-confirm" type="button" disabled={busy} onClick={confirm}>{busy ? t('正在恢复…', 'Resetting…') : t('确认恢复默认', 'Restore defaults')}</button>
       </div>
     </div>
   </dialog>;

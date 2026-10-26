@@ -64,7 +64,7 @@ export async function buildNpmEntry({ tarball, out, repo }) {
   assertRepository(repo);
   if (!tarball || !out) throw new Error('必须指定 --tarball 和 --out。');
   const artifact = await inspectTarball(tarball);
-  requirePackageReleaseNotes(artifact.manifest);
+  requirePackageReleaseNotes(artifact.manifest, { bilingual: true });
   if (artifact.manifest.name !== CORE_PACKAGE_NAME) throw new Error('只能从 dsh-boot-studio 核心包生成 npm 分发包。');
   if (artifact.bytes > 80 * 1024 * 1024) throw new Error('核心包超过80 MB。');
   const files = regularFiles(await readFile(resolve(tarball)));
@@ -82,7 +82,6 @@ export async function buildNpmEntry({ tarball, out, repo }) {
   files.set('package.json', Buffer.from(JSON.stringify(manifest, null, 2) + '\n'));
   const readme = files.get('README.md')?.toString('utf8');
   if (!readme?.trim()) throw new Error('npm 分发包缺少产品说明。');
-  files.set('README.md', Buffer.from(readme.replace(/^[^\r\n]*(?:\r?\n|$)/, '`' + NPM_PACKAGE_NAME + '`\n')));
   files.set('cordis.patch.yml', Buffer.from(`- insert:\n    - id: ${NPM_PACKAGE_NAME}\n      name: ${NPM_PACKAGE_NAME}\n`));
   files.set('lib/client.js', Buffer.from(NPM_CLIENT_HEADER + client.slice(CLIENT_HEADER.length)));
   // Do all validation before creating a new directory. Never overwrite an existing output.
