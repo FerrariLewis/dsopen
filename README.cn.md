@@ -1,5 +1,5 @@
 `dsh-openup-lewis`
-#[English](./README.md) | 简体中文
+[English](./README.md) | 简体中文
 
 # DSH LEWIS ENCHANTMENT｜开机动画
 
