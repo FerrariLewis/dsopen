@@ -54,7 +54,7 @@
 | 系列名称 | DSH LEWIS ENCHANTMENT · 附魔台|
 | 功能项目 | 开机动画 |
 | 插件名称 | dsh-openup-lewis |
-| 当前版本 | 1.2.10 |
+| 当前版本 | 1.3.0 |
 | 作者 | FerrariLewis |
 | 适用版本 | DeepSeek Harness ≥ 0.2.1-rc.2 且 < 0.3.0 |
 | 桌面平台 | Windows / macOS；已完成跨平台代码检查及 Chromium 播放验证，macOS 尚未进行真机测试|
