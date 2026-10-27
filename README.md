@@ -6,7 +6,6 @@ English | [简体中文](./README.cn.md)
 
 ## Disclaimer
 
-Sorry, we haven't added English support yet.
 
 My skills and knowledge are limited, and this plugin was created largely with the help of AI. It is currently not available in mainstream plugin marketplaces.
 
@@ -60,7 +59,7 @@ Created as part of DSH LEWIS ENCHANTMENT, this plugin brings full-length startup
 | Series | DSH LEWIS ENCHANTMENT · 附魔台|
 | Feature | Startup Animation |
 | Plugin name | dsh-openup-lewis |
-| Current version | 1.2.10 |
+| Current version | 1.3.0 |
 | Author | FerrariLewis |
 | Supported version | DeepSeek Harness ≥ 0.2.1-rc.2 and < 0.3.0 |
 | Desktop platforms |  Windows / macOS. Cross-platform code checks and Chromium playback validation have been completed. Testing on a physical Mac has not yet been performed.|
