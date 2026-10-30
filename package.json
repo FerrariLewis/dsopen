@@ -1,12 +1,12 @@
 {
   "name": "dsh-boot-studio",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "lewisEnchantRelease": {
-    "version": "1.3.2",
+    "version": "1.3.3",
     "notes": "修复已知问题，提升系统稳定性"
   },
   "lewisEnchantReleaseEn": {
-    "version": "1.3.2",
+    "version": "1.3.3",
     "notes": "Fix known issues and improve system stability."
   },
   "description": "DSH LEWIS ENCHANTMENT · 附魔台｜开机动画：铺满当前窗口的完整开场、自定义视频与封面、启动检查更新和磨砂提示。",

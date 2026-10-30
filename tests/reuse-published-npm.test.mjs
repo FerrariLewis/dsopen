@@ -41,6 +41,21 @@ test('same regular file bytes with a different gzip OS header reuse the exact pu
   assert.equal(fixtureValue.requests.length, 2);
 });
 
+test('Fetch-decoded compressed metadata uses decoded limits instead of the encoded Content-Length', async (t) => {
+  for (const encoding of ['gzip', 'br', 'identity']) {
+    const f = await fixture(t);
+    const fetchImpl = (url) =>
+      url.endsWith('.tgz')
+        ? new Response(built)
+        : new Response(JSON.stringify(npmMetadata(pkg, built)), {
+            headers: { 'content-encoding': encoding, 'content-length': '1' },
+          });
+    const operation = reusePublishedNpm({ ...f, fetchImpl });
+    if (encoding === 'identity') await assert.rejects(operation, /incomplete/);
+    else assert.equal((await operation).reused, true);
+  }
+});
+
 test('different runtime bytes or file inventories fail without overwriting the local build', async (t) => {
   for (const entries of [
     [tarEntry('package/lib/client.js', 'one changed runtime byte')],

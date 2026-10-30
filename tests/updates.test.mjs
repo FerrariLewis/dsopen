@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
 import {
   createUpdateService,
   readPackageManifest,
@@ -29,6 +31,132 @@ async function fixture(t, fetchImpl, { current = '1.3.0' } = {}) {
   t.after(() => service.dispose());
   return { root, dataDir, packageFile, service };
 }
+
+/** Real HTTP/undici transport: encoded header length differs from decoded body. */
+async function gzipRegistryFixture(
+  t,
+  {
+    encodeArchive = false,
+    metadataExtra = {},
+    omitMetadataLength = false,
+    tamperArchive = false,
+  } = {},
+) {
+  const pkg = packageManifest('1.3.2');
+  const bytes = archive(pkg);
+  const metadata = { ...npmMetadata(pkg, bytes), ...metadataExtra };
+  const metadataBody = Buffer.from(JSON.stringify(metadata));
+  const metadataWire = gzipSync(metadataBody);
+  const sentArchive = tamperArchive
+    ? archive(pkg, [tarEntry('package/altered.txt', 'different bytes')])
+    : bytes;
+  const archiveWire = encodeArchive ? gzipSync(sentArchive) : sentArchive;
+  const observed = [];
+  const server = createServer((req, res) => {
+    const isMetadata = req.url === '/latest';
+    const wire = isMetadata ? metadataWire : archiveWire;
+    const headers = {
+      'content-type': isMetadata ? 'application/json' : 'application/octet-stream',
+    };
+    if (isMetadata || encodeArchive) headers['content-encoding'] = 'gzip';
+    if (!isMetadata || !omitMetadataLength) headers['content-length'] = String(wire.length);
+    res.writeHead(200, headers);
+    res.end(wire);
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const fetchImpl = async (url, options) => {
+    if (new URL(url).hostname === 'registry.npmjs.org')
+      throw new TypeError('simulated primary registry outage');
+    assert.equal(new URL(url).hostname, 'registry.npmmirror.com');
+    const metadataRequest = url.endsWith('/latest');
+    const response = await fetch(base + (metadataRequest ? '/latest' : '/archive'), options);
+    observed.push({
+      metadataRequest,
+      contentEncoding: response.headers.get('content-encoding'),
+      contentLength: response.headers.get('content-length'),
+    });
+    return response;
+  };
+  const context = await fixture(t, fetchImpl, { current: '1.3.1' });
+  return { ...context, bytes, metadataBody, metadataWire, observed };
+}
+
+test('real gzip HTTP mirror metadata is decoded by Node fetch and can stage an unchanged tgz', async (t) => {
+  const { service, bytes, metadataBody, metadataWire, observed } = await gzipRegistryFixture(t);
+  assert.notEqual(metadataBody.length, metadataWire.length);
+  const status = await service.check();
+  assert.equal(status.channelReady, true, status.message);
+  assert.equal(status.available, true);
+  assert.equal(status.latestVersion, '1.3.2');
+  assert.equal(observed[0].contentEncoding, 'gzip');
+  assert.equal(Number(observed[0].contentLength), metadataWire.length);
+  const staged = await service.prepare('1.3.2');
+  assert.deepEqual(await readFile(staged.spec), bytes);
+  assert.equal(bytes[0], 0x1f);
+  assert.equal(bytes[1], 0x8b);
+  assert.equal(staged.sha256, createHash('sha256').update(bytes).digest('hex'));
+});
+
+test('gzip HTTP bodies without Content-Length are accepted and HTTP-gzipped tgz keeps payload integrity', async (t) => {
+  const { service, bytes, observed } = await gzipRegistryFixture(t, {
+    omitMetadataLength: true,
+    encodeArchive: true,
+  });
+  const staged = await service.prepare('1.3.2');
+  assert.equal(observed.find((item) => item.metadataRequest).contentLength, null);
+  assert.equal(observed.find((item) => !item.metadataRequest).contentEncoding, 'gzip');
+  assert.deepEqual(await readFile(staged.spec), bytes);
+});
+
+test('compressed HTTP metadata still obeys the decoded-body limit', async (t) => {
+  const { service, metadataWire, metadataBody } = await gzipRegistryFixture(t, {
+    metadataExtra: { padding: 'x'.repeat(70_000) },
+  });
+  assert.ok(metadataWire.length < 65536);
+  assert.ok(metadataBody.length > 65536);
+  const status = await service.check();
+  assert.equal(status.available, false);
+  assert.equal(status.channelReady, false);
+  assert.equal(status.code, 'BOOT_UPDATE_INVALID');
+});
+
+test('HTTP gzip does not weaken archive SHA verification', async (t) => {
+  const { service, dataDir } = await gzipRegistryFixture(t, {
+    encodeArchive: true,
+    tamperArchive: true,
+  });
+  await assert.rejects(service.prepare('1.3.2'), { code: 'BOOT_UPDATE_INTEGRITY' });
+  assert.deepEqual(await readdir(join(dataDir, 'update-cache')).catch(() => []), []);
+});
+
+test('identity responses with a mismatched declared body length are still rejected', async (t) => {
+  const pkg = packageManifest('1.3.2'),
+    body = JSON.stringify(npmMetadata(pkg, archive(pkg)));
+  for (const encoding of [undefined, 'identity']) {
+    const { service } = await fixture(
+      t,
+      async () =>
+        new Response(body, {
+          headers: {
+            'content-type': 'application/json',
+            'content-length': String(Buffer.byteLength(body) + 10),
+            ...(encoding ? { 'content-encoding': encoding } : {}),
+          },
+        }),
+    );
+    const status = await service.check();
+    assert.equal(status.available, false);
+    assert.equal(status.channelReady, false);
+    assert.equal(status.code, 'BOOT_UPDATE_NETWORK');
+    assert.match(status.message, /未完整下载/);
+  }
+});
 
 test('release-compatible and async TAR scanners agree, and runtime yields to the event loop', async () => {
   const pkg = packageManifest();

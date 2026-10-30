@@ -44,7 +44,9 @@ async function officialResponse(fetchImpl, url, signal) {
 }
 
 async function boundedBytes(response, limit, signal) {
-  const rawLength = response.headers.get('content-length');
+  const encoding = response.headers.get('content-encoding')?.trim().toLowerCase();
+  const rawLength =
+    !encoding || encoding === 'identity' ? response.headers.get('content-length') : null;
   const length = rawLength === null ? null : Number(rawLength);
   if (
     rawLength !== null &&

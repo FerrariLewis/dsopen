@@ -526,7 +526,13 @@ function readWithSignal(reader, signal) {
 async function responseBytes(response, limit, signal, { onProgress, budget, expectedBytes } = {}) {
   const rawLength = response.headers.get('content-length');
   const parsedLength = rawLength && /^\d+$/.test(rawLength) ? Number(rawLength) : null;
-  const length = Number.isSafeInteger(parsedLength) && parsedLength > 0 ? parsedLength : null;
+  // Node fetch decodes HTTP gzip/br/deflate while retaining the encoded
+  // Content-Length header. Only identity lengths describe the bytes we read.
+  const encoded = String(response.headers.get('content-encoding') || '')
+    .split(',')
+    .some((value) => value.trim() && value.trim().toLowerCase() !== 'identity');
+  const length =
+    !encoded && Number.isSafeInteger(parsedLength) && parsedLength > 0 ? parsedLength : null;
   if (length > limit) {
     await response.body?.cancel().catch(() => {});
     throw updateError('维护文件超过允许大小。');

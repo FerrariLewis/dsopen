@@ -249,6 +249,22 @@ test('registry verification downloads both complete tarballs and records the fin
   );
 });
 
+test('registry metadata accepts Fetch-decoded compression but still rejects truncated identity bodies', async (t) => {
+  for (const encoding of ['gzip', 'br', 'identity']) {
+    const f = await registryFixture(t, {
+      fetchImpl: (url, options, { mirrored }) =>
+        url.startsWith(MIRROR) && !url.endsWith('.tgz')
+          ? new Response(JSON.stringify(mirrored), {
+              headers: { 'content-encoding': encoding, 'content-length': '1' },
+            })
+          : null,
+    });
+    const operation = verifyRegistries(f.options, { fetchImpl: f.fetchImpl });
+    if (encoding === 'identity') await assert.rejects(operation, /incomplete/);
+    else assert.equal((await operation).success, true);
+  }
+});
+
 test('explicit sync runs only after official version/latest and its complete artifact have verified', async (t) => {
   const f = await registryFixture(t);
   const report = await verifyRegistries(

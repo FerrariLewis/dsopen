@@ -91,7 +91,9 @@ async function fetchAllowed(
 }
 
 async function responseBytes({ response, signal }, limit) {
-  const rawLength = response.headers.get('content-length');
+  const encoding = response.headers.get('content-encoding')?.trim().toLowerCase();
+  const rawLength =
+    !encoding || encoding === 'identity' ? response.headers.get('content-length') : null;
   const length = rawLength && /^\d+$/.test(rawLength) ? Number(rawLength) : null;
   if (length > limit) {
     await response.body?.cancel().catch(() => {});
