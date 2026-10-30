@@ -31,3 +31,12 @@ jobs:
       - run: pnpm test
       - run: pnpm run build
       - run: pnpm run verify:build
+      - name: Verify standalone distribution packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
+          pnpm pack
+          node scripts/build-npm-entry.mjs --tarball "dsh-boot-studio-$VERSION.tgz" --out npm-entry --repo "$GITHUB_REPOSITORY"
+          pnpm --dir npm-entry pack --pack-destination "$GITHUB_WORKSPACE"
+          sha256sum "dsh-boot-studio-$VERSION.tgz" "dsh-openup-lewis-$VERSION.tgz"
