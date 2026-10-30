@@ -145,6 +145,7 @@ export function EndingSettings({
   state,
   settings,
   busy,
+  preview,
   save,
   imageInput,
   uploadEndImage,
@@ -154,6 +155,7 @@ export function EndingSettings({
   EndTitleComponent,
 }) {
   const t = useI18n();
+  const previewEnding = (patch = {}) => preview(null, { ...settings, ...patch }, true);
   return (
     <>
       <div className="bs-preferences bs-ending-settings">
@@ -177,35 +179,55 @@ export function EndingSettings({
         </div>
         {!!state.logos?.length && (
           <div className="bs-logo-options">
-            {state.logos.map((logo) => (
-              <button
-                type="button"
-                key={logo.id}
-                disabled={busy}
-                className={
-                  settings.endScreen === 'logo' && settings.logoVariant === logo.id
-                    ? 'is-selected'
-                    : ''
-                }
-                aria-label={t(
-                  `使用内置结束画面 ${localizedName(logo)}`,
-                  `Use built-in ending screen ${localizedName(logo)}`,
-                )}
-                onClick={() => save({ endScreen: 'logo', logoVariant: logo.id })}
-              >
-                <img src={logo.url} alt="" style={{ objectFit: logo.fit || 'cover' }} />
-                <span>
-                  {localizedName(logo)}
-                  {settings.endScreen === 'logo' && settings.logoVariant === logo.id ? ' ✓' : ''}
-                </span>
-              </button>
-            ))}
+            {state.logos.map((logo) => {
+              const selected = settings.endScreen === 'logo' && settings.logoVariant === logo.id;
+              return (
+                <article className={`bs-end-card ${selected ? 'is-selected' : ''}`} key={logo.id}>
+                  <button
+                    type="button"
+                    className="bs-end-preview"
+                    disabled={busy}
+                    aria-label={t(
+                      `预览内置结束画面 ${localizedName(logo)}`,
+                      `Preview built-in ending screen ${localizedName(logo)}`,
+                    )}
+                    onClick={() => previewEnding({ endScreen: 'logo', logoVariant: logo.id })}
+                  >
+                    <img src={logo.url} alt="" style={{ objectFit: logo.fit || 'cover' }} />
+                    <span>{localizedName(logo)}</span>
+                  </button>
+                  <div className="bs-clip-actions">
+                    <button
+                      type="button"
+                      className={selected ? 'bs-selected' : ''}
+                      disabled={busy || selected}
+                      aria-pressed={selected}
+                      aria-label={t(
+                        `使用内置结束画面 ${localizedName(logo)}`,
+                        `Use built-in ending screen ${localizedName(logo)}`,
+                      )}
+                      onClick={() => save({ endScreen: 'logo', logoVariant: logo.id })}
+                    >
+                      {selected
+                        ? t('✓ 当前动画', '✓ Selected')
+                        : t('使用此动画', 'Use this animation')}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
         <div className="bs-ending-preview">
-          <div className="bs-ending-mini">
+          <button
+            type="button"
+            className="bs-ending-mini"
+            disabled={busy}
+            aria-label={t('预览当前结束画面', 'Preview current ending screen')}
+            onClick={() => previewEnding()}
+          >
             <EndTitleComponent settings={settings} />
-          </div>
+          </button>
           <div>
             <strong>
               {settings.endScreen === 'image'
@@ -247,36 +269,60 @@ export function EndingSettings({
               >
                 <button
                   type="button"
+                  className="bs-end-preview"
                   disabled={busy}
-                  aria-label={t(`使用结束图片 ${image.name}`, `Use ending image ${image.name}`)}
-                  onClick={() => save({ endImageId: image.id, endScreen: 'image' })}
+                  aria-label={t(`预览结束图片 ${image.name}`, `Preview ending image ${image.name}`)}
+                  onClick={() => previewEnding({ endImageId: image.id, endScreen: 'image' })}
                 >
                   <img src={image.url} alt="" />
                   <span>{image.name}</span>
                 </button>
+                <div className="bs-clip-actions">
+                  <button
+                    type="button"
+                    disabled={
+                      busy || (settings.endScreen === 'image' && settings.endImageId === image.id)
+                    }
+                    className={
+                      settings.endScreen === 'image' && settings.endImageId === image.id
+                        ? 'bs-selected'
+                        : ''
+                    }
+                    aria-pressed={
+                      settings.endScreen === 'image' && settings.endImageId === image.id
+                    }
+                    aria-label={t(`使用结束图片 ${image.name}`, `Use ending image ${image.name}`)}
+                    onClick={() => save({ endImageId: image.id, endScreen: 'image' })}
+                  >
+                    {settings.endScreen === 'image' && settings.endImageId === image.id
+                      ? t('✓ 当前动画', '✓ Selected')
+                      : t('使用此动画', 'Use this animation')}
+                  </button>
+                  {pendingImageDelete !== image.id && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="bs-delete"
+                      aria-label={t(
+                        `移除结束图片 ${image.name}`,
+                        `Remove ending image ${image.name}`,
+                      )}
+                      onClick={() => setPendingImageDelete(image.id)}
+                    >
+                      {t('移除', 'Remove')}
+                    </button>
+                  )}
+                </div>
                 {pendingImageDelete === image.id ? (
-                  <span>
+                  <div className="bs-end-delete-confirm">
                     <button type="button" disabled={busy} onClick={() => removeEndImage(image)}>
                       {t('确认移除', 'Confirm removal')}
                     </button>
                     <button type="button" onClick={() => setPendingImageDelete(null)}>
                       {t('取消', 'Cancel')}
                     </button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className="bs-delete"
-                    aria-label={t(
-                      `移除结束图片 ${image.name}`,
-                      `Remove ending image ${image.name}`,
-                    )}
-                    onClick={() => setPendingImageDelete(image.id)}
-                  >
-                    {t('移除', 'Remove')}
-                  </button>
-                )}
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

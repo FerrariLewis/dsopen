@@ -524,8 +524,15 @@ export function SettingsPanel({ standalone = false, updateTools }) {
           <button
             className="bs-primary"
             type="button"
-            disabled={busy || (!stages.video && !stages.end) || (stages.video && !selected)}
-            onClick={() => preview(selected, settings)}
+            disabled={busy || !selected}
+            onClick={() =>
+              preview(selected, {
+                ...settings,
+                enabled: true,
+                videoEnabled: true,
+                endEnabled: true,
+              })
+            }
           >
             {t('▶ 预览当前开场', '▶ Preview current intro')}
           </button>
@@ -581,6 +588,7 @@ export function SettingsPanel({ standalone = false, updateTools }) {
             state={state}
             settings={settings}
             busy={busy}
+            preview={preview}
             save={save}
             imageInput={imageInput}
             uploadEndImage={uploadEndImage}
