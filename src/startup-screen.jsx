@@ -15,7 +15,9 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
   const realWindow = realDocument.defaultView;
   const shadow = container.shadowRoot ?? container.attachShadow({ mode: 'open' });
   const style = realDocument.createElement('style');
-  style.textContent = STARTUP_CSS + `
+  style.textContent =
+    STARTUP_CSS +
+    `
     #dsh-startup-root[lang="en"] .dsu-status.dsu-zhline {
       font-family: var(--dsu-din); font-size: clamp(15px, 2.8vw, 32px);
       letter-spacing: .04em; text-indent: .04em; white-space: normal;
@@ -23,7 +25,8 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
     }
   `;
   const body = realDocument.createElement('div');
-  body.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:hidden;background:#000;';
+  body.style.cssText =
+    'position:absolute;inset:0;width:100%;height:100%;overflow:hidden;background:#000;';
   shadow.replaceChildren(style, body);
   let disposed = false;
   let completed = false;
@@ -37,7 +40,7 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
   const level = Number.isFinite(Number(volume)) ? Math.min(1, Math.max(0, Number(volume))) : 0.7;
   const audible = sound === true && level > 0;
 
-  const trackEvents = target => ({
+  const trackEvents = (target) => ({
     addEventListener(type, listener, options) {
       target.addEventListener(type, listener, options);
       listeners.push(() => target.removeEventListener(type, listener, options));
@@ -47,7 +50,11 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
   });
   const storage = () => {
     const values = new Map();
-    return { getItem: key => values.get(String(key)) ?? null, setItem: (key, value) => values.set(String(key), String(value)), removeItem: key => values.delete(String(key)) };
+    return {
+      getItem: (key) => values.get(String(key)) ?? null,
+      setItem: (key, value) => values.set(String(key), String(value)),
+      removeItem: (key) => values.delete(String(key)),
+    };
   };
   const NativeContext = realWindow.AudioContext || realWindow.webkitAudioContext;
   function ManagedAudioContext(...args) {
@@ -63,19 +70,31 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
   const localWindow = {
     ...trackEvents(eventTarget),
     __DSH_STARTUP__: {
-      enabled: true, mode: 'always', theme: 'light', speed: 1,
-      requireInteraction: false, allowSkip: false,
-      sound: audible, soundVolume: level,
-      voice: false, voiceCue: false, voiceSource: 'tts', sfx: 'synth',
+      enabled: true,
+      mode: 'always',
+      theme: 'light',
+      speed: 1,
+      requireInteraction: false,
+      allowSkip: false,
+      sound: audible,
+      soundVolume: level,
+      voice: false,
+      voiceCue: false,
+      voiceSource: 'tts',
+      sfx: 'synth',
     },
     __DSH_STARTUP_SKIP__: false,
-    AudioContext: ManagedAudioContext, webkitAudioContext: ManagedAudioContext,
-    speechSynthesis: undefined, SpeechSynthesisUtterance: undefined,
-    sessionStorage: storage(), localStorage: storage(),
+    AudioContext: ManagedAudioContext,
+    webkitAudioContext: ManagedAudioContext,
+    speechSynthesis: undefined,
+    SpeechSynthesisUtterance: undefined,
+    sessionStorage: storage(),
+    localStorage: storage(),
   };
   const localDocument = {
     ...trackEvents(documentEvents),
-    readyState: 'complete', body,
+    readyState: 'complete',
+    body,
     // Upstream's scroll locking applies only to these private elements.
     documentElement: realDocument.createElement('div'),
     head: realDocument.createElement('div'),
@@ -83,10 +102,11 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
     createElementNS: realDocument.createElementNS.bind(realDocument),
     createTextNode: realDocument.createTextNode.bind(realDocument),
     createDocumentFragment: realDocument.createDocumentFragment.bind(realDocument),
-    getElementById: id => shadow.getElementById(id),
+    getElementById: (id) => shadow.getElementById(id),
   };
   const environment = {
-    window: localWindow, document: localDocument,
+    window: localWindow,
+    document: localDocument,
     translate,
     subscribeLocale(listener) {
       const unsubscribe = getHostLocaleStore(realDocument).subscribe(listener);
@@ -95,25 +115,42 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
     },
     setTimeout(callback, delay, ...args) {
       if (disposed) return 0;
-      const id = realWindow.setTimeout(() => { timers.delete(id); if (!disposed) callback(...args); }, delay);
+      const id = realWindow.setTimeout(() => {
+        timers.delete(id);
+        if (!disposed) callback(...args);
+      }, delay);
       timers.add(id);
       return id;
     },
-    clearTimeout(id) { timers.delete(id); realWindow.clearTimeout(id); },
+    clearTimeout(id) {
+      timers.delete(id);
+      realWindow.clearTimeout(id);
+    },
     setInterval(callback, delay, ...args) {
       if (disposed) return 0;
-      const id = realWindow.setInterval(() => { if (!disposed) callback(...args); }, delay);
+      const id = realWindow.setInterval(() => {
+        if (!disposed) callback(...args);
+      }, delay);
       intervals.add(id);
       return id;
     },
-    clearInterval(id) { intervals.delete(id); realWindow.clearInterval(id); },
+    clearInterval(id) {
+      intervals.delete(id);
+      realWindow.clearInterval(id);
+    },
     requestAnimationFrame(callback) {
       if (disposed) return 0;
-      const id = realWindow.requestAnimationFrame(time => { frames.delete(id); if (!disposed) callback(time); });
+      const id = realWindow.requestAnimationFrame((time) => {
+        frames.delete(id);
+        if (!disposed) callback(time);
+      });
       frames.add(id);
       return id;
     },
-    cancelAnimationFrame(id) { frames.delete(id); realWindow.cancelAnimationFrame(id); },
+    cancelAnimationFrame(id) {
+      frames.delete(id);
+      realWindow.cancelAnimationFrame(id);
+    },
     // Audio assets are intentionally excluded. Never request the original host.
     fetch: () => Promise.reject(new Error('External startup assets are disabled')),
   };
@@ -122,18 +159,24 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
     if (disposed) return;
     disposed = true;
     // Settle pending upstream waits, then synchronously stop every owned resource.
-    try { localWindow.__DSH_STARTUP_API__?.skip(); } catch {}
+    try {
+      localWindow.__DSH_STARTUP_API__?.skip();
+    } catch {}
     for (const id of timers) realWindow.clearTimeout(id);
     for (const id of intervals) realWindow.clearInterval(id);
     for (const id of frames) realWindow.cancelAnimationFrame(id);
-    timers.clear(); intervals.clear(); frames.clear();
+    timers.clear();
+    intervals.clear();
+    frames.clear();
     for (const context of contexts) {
-      try { void context.close().catch(() => {}); } catch {}
+      try {
+        void context.close().catch(() => {});
+      } catch {}
     }
     contexts.clear();
     for (const off of listeners) off();
     listeners.length = 0;
-    body.getAnimations({ subtree: true }).forEach(animation => animation.cancel());
+    body.getAnimations({ subtree: true }).forEach((animation) => animation.cancel());
     shadow.replaceChildren();
   }
   function complete() {
@@ -143,8 +186,12 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
     onEnded?.();
   }
   localWindow.addEventListener('dsh-startup:done', complete, { once: true });
-  try { mountStartupRuntime(environment); }
-  catch (error) { dispose(); throw error; }
+  try {
+    mountStartupRuntime(environment);
+  } catch (error) {
+    dispose();
+    throw error;
+  }
   return dispose;
 }
 
@@ -155,8 +202,28 @@ export function StartupSequence({ sound = false, volume = 0.7, onEnded }) {
   ended.current = onEnded;
   useEffect(() => {
     if (!host.current) return;
-    try { return mountStartupSequence(host.current, { sound, volume, onEnded: () => ended.current?.() }); }
-    catch { ended.current?.(); }
+    try {
+      return mountStartupSequence(host.current, {
+        sound,
+        volume,
+        onEnded: () => ended.current?.(),
+      });
+    } catch {
+      ended.current?.();
+    }
   }, [sound, volume]);
-  return <div ref={host} data-testid="startup-sequence" aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', background: '#000' }} />;
+  return (
+    <div
+      ref={host}
+      data-testid="startup-sequence"
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        overflow: 'hidden',
+        background: '#000',
+      }}
+    />
+  );
 }

@@ -1,0 +1,11 @@
+node_modules/
+lib/
+assets/
+README.md
+README.cn.md
+THIRD_PARTY_NOTICES.md
+pnpm-lock.yaml
+release-assets/
+npm-entry/
+npm-release/
+*.tgz

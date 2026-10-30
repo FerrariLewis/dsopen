@@ -7,5 +7,5 @@ export { bindHostLocale } from './host-locale.js';
 export function useI18n() {
   const store = getHostLocaleStore();
   const locale = useSyncExternalStore(store.subscribe, store.getSnapshot, () => 'zh');
-  return (zh, en) => locale === 'en' ? en : zh;
+  return (zh, en) => (locale === 'en' ? en : zh);
 }

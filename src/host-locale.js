@@ -17,10 +17,13 @@ export function readHostLocale(doc = globalThis.document) {
 
 /** Called from the client's optional locale-service injection; does not write preferences. */
 export function bindHostLocale(next) {
-  if (!next || typeof next.getSnapshot !== 'function' || typeof next.subscribe !== 'function') return () => {};
+  if (!next || typeof next.getSnapshot !== 'function' || typeof next.subscribe !== 'function')
+    return () => {};
   const previous = service;
   service = next;
-  const refresh = () => { for (const listener of [...serviceListeners]) listener(); };
+  const refresh = () => {
+    for (const listener of [...serviceListeners]) listener();
+  };
   const unsubscribe = next.subscribe(refresh);
   refresh();
   let disposed = false;
@@ -28,7 +31,10 @@ export function bindHostLocale(next) {
     if (disposed) return;
     disposed = true;
     unsubscribe?.();
-    if (service === next) { service = previous; refresh(); }
+    if (service === next) {
+      service = previous;
+      refresh();
+    }
   };
 }
 
@@ -37,7 +43,8 @@ export function getHostLocaleStore(doc = globalThis.document) {
   let store = stores.get(doc);
   if (store) return store;
   const listeners = new Set();
-  let snapshot = readHostLocale(doc), observer;
+  let snapshot = readHostLocale(doc),
+    observer;
   const refresh = () => {
     const next = readHostLocale(doc);
     if (snapshot === next) return;
@@ -62,7 +69,11 @@ export function getHostLocaleStore(doc = globalThis.document) {
         if (disposed) return;
         disposed = true;
         listeners.delete(listener);
-        if (!listeners.size) { serviceListeners.delete(refresh); observer?.disconnect(); observer = null; }
+        if (!listeners.size) {
+          serviceListeners.delete(refresh);
+          observer?.disconnect();
+          observer = null;
+        }
       };
     },
   });
@@ -74,4 +85,7 @@ export function subscribeHostLocale(listener, doc = globalThis.document) {
   return getHostLocaleStore(doc).subscribe(listener);
 }
 
-const fallbackStore = Object.freeze({ getSnapshot: () => readHostLocale(), subscribe: () => () => {} });
+const fallbackStore = Object.freeze({
+  getSnapshot: () => readHostLocale(),
+  subscribe: () => () => {},
+});

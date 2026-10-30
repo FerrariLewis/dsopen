@@ -818,7 +818,6 @@ export function mountStartupRuntime(environment) {
       playAssetAndWait: playAssetAndWait,
       /* 文字渐显 / 阶段推进 / 按钮确认 —— 优先用真素材 */
       tick: function () { if (!playAsset('sfx-tick', 0.45)) tone(1760, 0.035, 'square', 0.022) },
-      confirm: function () { if (!playAsset('sfx-tick', 0.85)) { tone(660, 0.09, 'triangle', 0.07); tone(990, 0.17, 'triangle', 0.055, 0.085) } },
       tickRun: function () { playAsset('sfx-ticks-run', 0.5) },
       step: function () { if (!playAsset('sfx-tick', 0.6)) { tone(880, 0.05, 'sine', 0.05); tone(1320, 0.07, 'sine', 0.028, 0.045) } },
       hover: function () { tone(2200, 0.02, 'sine', 0.018) },
