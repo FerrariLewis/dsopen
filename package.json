@@ -1,13 +1,13 @@
 {
   "name": "dsh-boot-studio",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "lewisEnchantRelease": {
-    "version": "1.3.0",
-    "notes": "1.更新了跟随harness切换语言\n\n作者觉得，ai没有国界，插件没有国界！终于告一段落，之后的小版本更新估计就是一些新增的好看动画啊，图片啊。删除一些难看/侵权的动画，图片什么的\n\n现在，感谢你用我的插件"
+    "version": "1.3.1",
+    "notes": "修复已知问题，提升系统稳定性"
   },
   "lewisEnchantReleaseEn": {
-    "version": "1.3.0",
-    "notes": "1. Added support for following Harness language changes\n\nAs the author, I believe AI has no borders, and neither do plugins! This round of work is finally wrapped up. Future minor updates will probably add some nice-looking animations and images, and remove those that look bad or infringe on others' rights.\n\nThank you for using my plugin!"
+    "version": "1.3.1",
+    "notes": "Fix known issues and improve system stability."
   },
   "description": "DSH LEWIS ENCHANTMENT · 附魔台｜开机动画：铺满当前窗口的完整开场、自定义视频与封面、启动检查更新和磨砂提示。",
   "type": "module",
@@ -29,6 +29,7 @@
     "assets/startup-screen/NOTICE.md",
     "cordis.patch.yml",
     "README.md",
+    "README.cn.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md"
   ],
@@ -38,9 +39,9 @@
     "type": "git",
     "url": "git+https://github.com/FerrariLewis/open.git"
   },
-  "homepage": "https://github.com/FerrariLewis/open#readme",
+  "homepage": "https://github.com/FerrariLewis/dsopen#readme",
   "bugs": {
-    "url": "https://github.com/FerrariLewis/open/issues"
+    "url": "https://github.com/FerrariLewis/dsopen/issues"
   },
   "keywords": [
     "dsh-openup-lewis",
@@ -59,7 +60,10 @@
     "node": ">=20"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "prettier": "3.9.10"
   },
   "dsh": {
     "bundle": {
@@ -76,6 +80,11 @@
     }
   },
   "scripts": {
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "test": "node --test",
+    "lint": "eslint src scripts tests",
+    "format": "prettier --write src scripts tests .github/workflows package.json eslint.config.mjs .prettierrc.json",
+    "format:check": "prettier --check src scripts tests .github/workflows package.json eslint.config.mjs .prettierrc.json",
+    "verify:build": "node scripts/verify-build.mjs"
   }
 }
