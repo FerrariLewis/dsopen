@@ -164,6 +164,60 @@ test('packed host runtime imports without source tree, installed dependencies, o
   assert.equal(typeof imported.createHandler, 'function');
 });
 
+test('release cover checks retain legacy PNG, accept WebP, and reject missing or duplicate formats', async (t) => {
+  const temporary = await mkdtemp(join(tmpdir(), 'lewis-release-covers-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const covers = ['assassins-creed', 'cyberpunk-2077', 'gta6', 'horizon6', 'horizon5', 'horizon4'];
+  const required = [
+    'lib/client.js',
+    'lib/index.js',
+    'lib/release-notes.js',
+    'assets/author/author.jpg',
+    'assets/deepseek-whale-girl-intro.mp4',
+    'assets/deepsea-notices/LICENSE',
+    'assets/deepsea-notices/LICENSE-ARTWORK.md',
+    'assets/deepsea-notices/NOTICE-ARTWORK.md',
+    'assets/deepsea-notices/ADAPTATION.md',
+    'assets/deepseek-title-intro.mp4',
+    'assets/deepseek-dance-intro.mp4',
+    'assets/deepseek-sea-intro.mp4',
+    'assets/lxj-notices/LICENSE',
+    'assets/lxj-notices/NOTICE.md',
+  ];
+  const inspect = async (name, coverFiles, version = VERSION) => {
+    const pkg = manifest({
+      version,
+      lewisEnchantRelease: { version, notes },
+      lewisEnchantReleaseEn: { version, notes: notesEn },
+    });
+    const path = join(temporary, name + '.tgz');
+    await writeFile(
+      path,
+      archive(
+        pkg,
+        [...required, ...coverFiles].map((file) => tarEntry('package/' + file, 'fixture')),
+      ),
+    );
+    return inspectTarball(path);
+  };
+  const paths = (extension, names = covers) =>
+    names.map((name) => `assets/end-covers/${name}.${extension}`);
+  for (const extension of ['png', 'webp'])
+    assert.equal((await inspect(extension, paths(extension))).manifest.version, VERSION);
+  await assert.rejects(inspect('missing', paths('webp').slice(1)), /封面 assassins-creed/);
+  await assert.rejects(
+    inspect('duplicate', [...paths('png'), paths('webp')[0]]),
+    /封面 assassins-creed/,
+  );
+  const complete = paths('webp', [...covers, 'silver', 'gold', 'ice']);
+  assert.equal((await inspect('current', complete, '1.3.4')).manifest.version, '1.3.4');
+  await assert.rejects(inspect('missing-default', paths('webp'), '1.3.4'), /封面 silver/);
+  await assert.rejects(
+    inspect('duplicate-default', [...complete, 'assets/end-covers/gold.png'], '1.3.4'),
+    /封面 gold/,
+  );
+});
+
 async function registryFixture(t, changes = {}) {
   const temporary = await mkdtemp(join(tmpdir(), 'dsh-registry-check-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));

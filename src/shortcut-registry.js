@@ -24,7 +24,9 @@ function createRegistry() {
       // A failing optional shortcut must not stop other plugins or the workspace.
       try {
         listener();
-      } catch {}
+      } catch {
+        // One shortcut subscriber must not prevent other plugins from refreshing.
+      }
     }
   }
 
@@ -50,6 +52,7 @@ function createRegistry() {
         !id ||
         id.length > 128 ||
         id !== id.trim() ||
+        // eslint-disable-next-line no-control-regex -- Shortcut IDs cannot contain control characters.
         /[\x00-\x1f\x7f]/.test(id)
       )
         throw new TypeError('快捷入口需要稳定且有效的插件 ID。');

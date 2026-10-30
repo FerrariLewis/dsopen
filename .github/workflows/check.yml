@@ -1,9 +1,10 @@
 name: Check plugin regressions
 
 on:
+  workflow_call:
   pull_request:
   push:
-    branches-ignore: [release-bundles]
+    branches-ignore: [release-bundles, main, master]
 
 permissions:
   contents: read
@@ -39,4 +40,5 @@ jobs:
           pnpm pack
           node scripts/build-npm-entry.mjs --tarball "dsh-boot-studio-$VERSION.tgz" --out npm-entry --repo "$GITHUB_REPOSITORY"
           pnpm --dir npm-entry pack --pack-destination "$GITHUB_WORKSPACE"
+          node scripts/verify-package.mjs "dsh-boot-studio-$VERSION.tgz" "dsh-openup-lewis-$VERSION.tgz"
           sha256sum "dsh-boot-studio-$VERSION.tgz" "dsh-openup-lewis-$VERSION.tgz"

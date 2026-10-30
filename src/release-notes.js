@@ -19,6 +19,7 @@ export function validateReleaseNotes(value, expectedVersion, { required = false 
     typeof value.notes !== 'string' ||
     !value.notes.trim() ||
     value.notes.length > MAX_RELEASE_NOTES_LENGTH ||
+    // eslint-disable-next-line no-control-regex -- Reject controls while preserving the author's line breaks.
     /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value.notes)
   )
     throw new Error('作者更新说明须为 1 到 2000 字的纯文本，不接受控制字符。');

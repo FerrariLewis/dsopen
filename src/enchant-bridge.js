@@ -171,7 +171,9 @@ function createRegistry() {
     for (const listener of [...listeners]) {
       try {
         listener();
-      } catch {}
+      } catch {
+        // A failing plugin listener must not interrupt the remaining subscribers.
+      }
     }
   }
   function refresh() {
@@ -212,6 +214,7 @@ function createRegistry() {
         typeof name !== 'string' ||
         !name.trim() ||
         name.length > 80 ||
+        // eslint-disable-next-line no-control-regex -- Plugin identifiers cannot contain control characters.
         /[\x00-\x1f\x7f]/.test(name)
       )
         throw new TypeError('附魔台插件名称无效。');

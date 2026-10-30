@@ -161,7 +161,9 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
     // Settle pending upstream waits, then synchronously stop every owned resource.
     try {
       localWindow.__DSH_STARTUP_API__?.skip();
-    } catch {}
+    } catch {
+      // The embedded sequence may already have been disposed.
+    }
     for (const id of timers) realWindow.clearTimeout(id);
     for (const id of intervals) realWindow.clearInterval(id);
     for (const id of frames) realWindow.cancelAnimationFrame(id);
@@ -171,7 +173,9 @@ export function mountStartupSequence(container, { sound = false, volume = 0.7, o
     for (const context of contexts) {
       try {
         void context.close().catch(() => {});
-      } catch {}
+      } catch {
+        // Continue releasing the remaining audio contexts after a close failure.
+      }
     }
     contexts.clear();
     for (const off of listeners) off();

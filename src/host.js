@@ -57,15 +57,15 @@ const SEQUENCE = {
   bytes: 0,
 };
 const LOGOS = [
-  { id: 'silver', name: '远山', file: 'silver.png' },
-  { id: 'gold', name: '黑金', file: 'gold.png' },
-  { id: 'ice', name: '蓝雾', file: 'ice.png' },
-  { id: 'assassins-creed', name: '刺客信条', file: 'assassins-creed.png', fit: 'cover' },
-  { id: 'cyberpunk-2077', name: '赛博朋克2077', file: 'cyberpunk-2077.png', fit: 'cover' },
-  { id: 'gta6', name: 'GTA6', file: 'gta6.png', fit: 'cover' },
-  { id: 'horizon6', name: '地平线6', file: 'horizon6.png', fit: 'cover' },
-  { id: 'horizon5', name: '地平线5', file: 'horizon5.png', fit: 'cover' },
-  { id: 'horizon4', name: '地平线4', file: 'horizon4.png', fit: 'cover' },
+  { id: 'silver', name: '远山', file: 'silver.webp' },
+  { id: 'gold', name: '黑金', file: 'gold.webp' },
+  { id: 'ice', name: '蓝雾', file: 'ice.webp' },
+  { id: 'assassins-creed', name: '刺客信条', file: 'assassins-creed.webp', fit: 'cover' },
+  { id: 'cyberpunk-2077', name: '赛博朋克2077', file: 'cyberpunk-2077.webp', fit: 'cover' },
+  { id: 'gta6', name: 'GTA6', file: 'gta6.webp', fit: 'cover' },
+  { id: 'horizon6', name: '地平线6', file: 'horizon6.webp', fit: 'cover' },
+  { id: 'horizon5', name: '地平线5', file: 'horizon5.webp', fit: 'cover' },
+  { id: 'horizon4', name: '地平线4', file: 'horizon4.webp', fit: 'cover' },
 ];
 const UPLOAD_ID = /^u_[a-f0-9-]{36}$/;
 const IMAGE_ID = /^i_[a-f0-9-]{36}$/;
@@ -625,7 +625,13 @@ export function createHandler(options = {}) {
         const path = join(assetsDir, 'end-covers', logo.file);
         const info = await safeFile(path);
         return info && info.size
-          ? { ...logo, path, ext: '.png', bytes: info.size, mtime: info.mtimeMs }
+          ? {
+              ...logo,
+              path,
+              ext: extname(logo.file).toLowerCase(),
+              bytes: info.size,
+              mtime: info.mtimeMs,
+            }
           : null;
       }),
     );
@@ -713,6 +719,7 @@ export function createHandler(options = {}) {
       throw new HttpError(400, '文件名编码无效。', 'BOOT_FILENAME_ENCODING');
     }
     filename = filename
+      // eslint-disable-next-line no-control-regex -- Uploaded display names must not carry control characters.
       .replace(/[\x00-\x1f\x7f]/g, '')
       .split(/[\\/]/)
       .pop();
@@ -885,7 +892,7 @@ export function createHandler(options = {}) {
         req.headers['if-range'] && req.headers['if-range'] !== tag ? null : req.headers.range,
         clip.bytes,
       );
-    } catch (error) {
+    } catch {
       res.writeHead(416, { ...headers, 'content-range': `bytes */${clip.bytes}` });
       res.end();
       return;

@@ -28,6 +28,8 @@ const image = () => {
   bytes.writeUInt32BE(1, 20);
   return bytes;
 };
+const builtinImage = () =>
+  Buffer.from('UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAAAdQoIIUrP+BiOh/AAA=', 'base64');
 const writeHeaders = { 'x-dsh-boot-studio': '1' };
 const savedStore = (settings = {}, uploads = [], endImages = []) => ({
   version: 1,
@@ -48,7 +50,7 @@ async function fixture(t, options = {}) {
   ])
     await mkdir(folder, { recursive: true });
   await writeFile(join(assetsDir, 'deepseek-brand-intro.mp4'), video());
-  await writeFile(join(assetsDir, 'end-covers', 'silver.png'), image());
+  await writeFile(join(assetsDir, 'end-covers', 'silver.webp'), builtinImage());
   await writeFile(join(assetsDir, 'author', 'author.jpg'), Buffer.from([255, 216, 255, 217]));
   const updateService = options.updateService ?? {
     identity: async () => ({ version: '1.3.0' }),
@@ -175,7 +177,10 @@ test('settings, stage switches, selected uploads and built-in media survive save
   assert.equal(state.settings.showShortcut, true);
   assert.equal((await f.request('/media/' + id)).body.equals(video()), true);
   assert.equal((await f.request('/author-image')).status, 200);
-  assert.equal((await f.request('/logo/silver')).status, 200);
+  const cover = await f.request('/logo/silver');
+  assert.equal(cover.status, 200);
+  assert.equal(cover.headers['content-type'], 'image/webp');
+  assert.deepEqual(cover.body, builtinImage());
 });
 
 test('settings validation rejects malformed changes without mutating saved preferences', async (t) => {

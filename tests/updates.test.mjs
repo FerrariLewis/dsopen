@@ -7,6 +7,8 @@ import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   createUpdateService,
   readPackageManifest,
@@ -20,6 +22,68 @@ import {
   archiveName,
   npmMetadata,
 } from './update-fixtures.mjs';
+
+test('prepare hashes GitHub bytes once and npm bytes once per integrity algorithm', async () => {
+  // Observe real built-in hashes in a child so instrumentation cannot change
+  // another test's ESM crypto bindings or bypass the production verification.
+  const program = `
+    import crypto from 'node:crypto';
+    import { syncBuiltinESMExports } from 'node:module';
+    import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+    import { tmpdir } from 'node:os';
+    import { join } from 'node:path';
+    import { createUpdateService } from ${JSON.stringify(new URL('../src/updates.js', import.meta.url).href)};
+    import { archive, npmMetadata, packageManifest } from ${JSON.stringify(new URL('./update-fixtures.mjs', import.meta.url).href)};
+    const results = [];
+    for (const source of ['github', 'npm']) {
+      const root = await mkdtemp(join(tmpdir(), 'lewis-digest-'));
+      let service;
+      const original = crypto.createHash;
+      try {
+        const name = source === 'github' ? 'dsh-boot-studio' : 'dsh-openup-lewis';
+        const pkg = packageManifest('1.3.1', { name });
+        const bytes = archive(pkg);
+        const sha256 = original('sha256').update(bytes).digest('hex');
+        const metadata = source === 'npm' ? npmMetadata(pkg, bytes) : {
+          format: 1, packageName: name, version: pkg.version, commit: 'a'.repeat(40),
+          sha256, bytes: bytes.length, publishTimestamp: 1, requiresRestart: true,
+          releaseNotes: pkg.lewisEnchantRelease,
+          tarballUrl: 'https://github.com/FerrariLewis/open/releases/download/v1.3.1/dsh-boot-studio-1.3.1.tgz',
+        };
+        const packageFile = join(root, 'package.json');
+        await writeFile(packageFile, JSON.stringify(packageManifest('1.3.0', { name })));
+        const calls = [];
+        crypto.createHash = (...args) => { calls.push(args[0]); return original(...args); };
+        syncBuiltinESMExports();
+        service = createUpdateService({
+          dataDir: join(root, 'data'), packageFile,
+          fetchImpl: async (url) => new Response(url.endsWith('.tgz') ? bytes : JSON.stringify(metadata)),
+        });
+        const staged = await service.prepare('1.3.1');
+        results.push({ source, calls, sha256: staged.sha256, expected: sha256,
+          unchanged: (await readFile(staged.spec)).equals(bytes) });
+      } finally {
+        crypto.createHash = original;
+        syncBuiltinESMExports();
+        service?.dispose();
+        await rm(root, { recursive: true, force: true });
+      }
+    }
+    process.stdout.write(JSON.stringify(results));
+  `;
+  const { stdout } = await promisify(execFile)(process.execPath, [
+    '--input-type=module',
+    '-e',
+    program,
+  ]);
+  const [github, npm] = JSON.parse(stdout);
+  assert.deepEqual(github.calls, ['sha256']);
+  assert.deepEqual(npm.calls, ['sha512', 'sha256']);
+  for (const result of [github, npm]) {
+    assert.equal(result.sha256, result.expected);
+    assert.equal(result.unchanged, true);
+  }
+});
 
 async function fixture(t, fetchImpl, { current = '1.3.0' } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'lewis-updates-'));
@@ -358,6 +422,74 @@ test('historic GitHub channel follows the canonical repository rename and the of
   assert.ok(calls.some((url) => url.startsWith('https://release-assets.githubusercontent.com/')));
 });
 
+test('reusing the GitHub digest still rejects incorrect SHA-256, short bodies and excess declared size', async (t) => {
+  const pkg = packageManifest('1.3.1', { name: 'dsh-boot-studio' });
+  const bytes = archive(pkg);
+  const metadata = {
+    format: 1,
+    packageName: pkg.name,
+    version: pkg.version,
+    commit: 'a'.repeat(40),
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+    bytes: bytes.length,
+    publishTimestamp: 1,
+    requiresRestart: true,
+    releaseNotes: pkg.lewisEnchantRelease,
+    tarballUrl: `https://github.com/FerrariLewis/open/releases/download/v${pkg.version}/${pkg.name}-${pkg.version}.tgz`,
+  };
+  for (const mode of ['sha256', 'short', 'oversize']) {
+    const manifest = {
+      ...metadata,
+      ...(mode === 'sha256' ? { sha256: '0'.repeat(64) } : {}),
+      ...(mode === 'oversize' ? { bytes: 80 * 1024 * 1024 + 1 } : {}),
+    };
+    const { service, packageFile, dataDir } = await fixture(
+      t,
+      async (url) =>
+        new Response(
+          url.endsWith('update.json')
+            ? JSON.stringify(manifest)
+            : mode === 'short'
+              ? bytes.subarray(0, bytes.length - 1)
+              : bytes,
+        ),
+    );
+    await writeFile(packageFile, JSON.stringify(packageManifest('1.3.0', { name: pkg.name })));
+    await assert.rejects(service.prepare('1.3.1'), (error) => {
+      assert.equal(
+        error.code,
+        mode === 'oversize' ? 'BOOT_UPDATE_INVALID' : 'BOOT_UPDATE_INTEGRITY',
+      );
+      return true;
+    });
+    assert.deepEqual(await readdir(join(dataDir, 'update-cache')).catch(() => []), []);
+  }
+});
+
+test('prepare rechecks previously referenced installers before staging the next update', async (t) => {
+  const pkg = packageManifest(),
+    bytes = archive(pkg),
+    metadata = npmMetadata(pkg, bytes);
+  const { root, dataDir, service } = await fixture(
+    t,
+    async (url) => new Response(url.endsWith('/latest') ? JSON.stringify(metadata) : bytes),
+  );
+  const cacheDir = join(dataDir, 'update-cache');
+  await mkdir(cacheDir, { recursive: true });
+  const oldBytes = archive(packageManifest('1.2.10'));
+  const oldName = archiveName('1.2.10', oldBytes);
+  await writeFile(join(cacheDir, oldName), oldBytes);
+  const profile = join(root, 'profiles', 'desktop');
+  await mkdir(profile, { recursive: true });
+  const profileFile = join(profile, 'package.json');
+  await writeFile(profileFile, JSON.stringify({ archive: oldName }));
+  assert.equal((await service.cleanup()).pending[0].reason, 'profile-reference');
+  await writeFile(profileFile, '{}');
+  const staged = await service.prepare('1.3.1');
+  assert.deepEqual(await readdir(cacheDir), [staged.spec.split(/[\\/]/).at(-1)]);
+  assert.deepEqual(await readFile(staged.spec), bytes);
+});
+
 test('installation acknowledgement verifies the exact cache artifact and preserves live profile references', async (t) => {
   const pkg = packageManifest(),
     bytes = archive(pkg),
@@ -395,7 +527,7 @@ test('installation acknowledgement verifies the exact cache artifact and preserv
     join(profile, 'package.json'),
     JSON.stringify({ dependencies: { 'dsh-openup-lewis': `file:${staged.spec}` } }),
   );
-  report = await service.cleanup();
+  report = await service.installed('1.3.1', staged.spec);
   assert.ok(report.removed.includes(oldName));
   assert.deepEqual(await readFile(staged.spec), bytes);
   assert.equal(report.pending.length, 0);

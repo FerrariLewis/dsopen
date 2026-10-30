@@ -136,15 +136,30 @@ export async function inspectTarball(tarball) {
     );
   if (compareVersions(manifest.version, '1.2.9') >= 0)
     required.push(
-      ...['assassins-creed', 'cyberpunk-2077', 'gta6', 'horizon6', 'horizon5', 'horizon4'].map(
-        (name) => `package/assets/end-covers/${name}.png`,
-      ),
       'package/assets/deepseek-title-intro.mp4',
       'package/assets/deepseek-dance-intro.mp4',
       'package/assets/deepseek-sea-intro.mp4',
       'package/assets/lxj-notices/LICENSE',
       'package/assets/lxj-notices/NOTICE.md',
     );
+  if (compareVersions(manifest.version, '1.2.9') >= 0) {
+    const covers = [
+      'assassins-creed',
+      'cyberpunk-2077',
+      'gta6',
+      'horizon6',
+      'horizon5',
+      'horizon4',
+    ];
+    if (compareVersions(manifest.version, '1.3.4') >= 0) covers.push('silver', 'gold', 'ice');
+    for (const name of covers) {
+      const formats = ['png', 'webp'].filter((extension) =>
+        files.includes(`package/assets/end-covers/${name}.${extension}`),
+      );
+      if (formats.length !== 1)
+        throw new Error(`安装包封面 ${name} 必须恰好包含一份 PNG 或 WebP。`);
+    }
+  }
   if (!required.every((file) => files.includes(file)))
     throw new Error('安装包缺少预构建 lib 或 bundle patch。');
   if (!manifest.dsh?.bundle?.patch) throw new Error('安装包不是可安装的 DSH bundle。');

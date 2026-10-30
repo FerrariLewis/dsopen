@@ -6,10 +6,12 @@ import { build } from 'esbuild';
 
 const built = await build({
   stdin: {
-    contents: `export { SettingsPanel, Player, EndTitle, playbackStages } from './src/client.jsx'; export { EndingSettings, VideoLibrary } from './src/settings-sections.jsx';`,
+    contents: `export { SettingsPanel, Player, EndTitle, playbackStages, BootRoot, ShortcutAction, openSettings, api } from './src/client.jsx'; export { EndingSettings, VideoLibrary } from './src/settings-sections.jsx'; export { UpdatePrompt } from './src/update-prompt.jsx'; export { bindHarnessServices } from './src/startup-update.js'; export { latestState, subscribers, publish } from './src/studio-state.js';`,
     resolveDir: fileURLToPath(new URL('..', import.meta.url)),
   },
   bundle: true,
+  minify: true,
+  keepNames: true,
   platform: 'node',
   format: 'cjs',
   write: false,
@@ -18,7 +20,7 @@ const built = await build({
 
 /** A small renderer host executes the real components and event handlers. It
  * supplies hooks/refs, not a second implementation of preview or selection. */
-function componentHost(fixture, language = 'zh') {
+function componentHost(fixture, language = 'zh', options = {}) {
   let slots = [],
     cursor = 0,
     seeded = false,
@@ -105,7 +107,7 @@ function componentHost(fixture, language = 'zh') {
     },
     AbortController,
     URL,
-    performance,
+    performance: options.performance || performance,
     setTimeout,
     clearTimeout,
     setInterval,
@@ -120,7 +122,13 @@ function componentHost(fixture, language = 'zh') {
       if (!element.props.ref || element.props.ref.current) continue;
       element.props.ref.current =
         element.type === 'video'
-          ? { currentTime: 0, pause() {}, load() {}, removeAttribute() {}, play: async () => {} }
+          ? {
+              currentTime: 0,
+              pause() {},
+              load() {},
+              removeAttribute() {},
+              play: options.play || (async () => {}),
+            }
           : {
               open: false,
               showModal() {
@@ -183,6 +191,8 @@ const byLabel = (tree, label) => {
 };
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
 function fixture(settings = {}) {
   return {
     settings: Object.freeze({
@@ -212,6 +222,268 @@ function fixture(settings = {}) {
     ],
   };
 }
+
+test('media failures keep the ending screen and preserve the failure reason until entry', () => {
+  for (const endEnabled of [true, false]) {
+    const host = componentHost(null),
+      closed = [];
+    const props = {
+      clip: fixture().clips[0],
+      settings: { videoEnabled: true, endEnabled },
+      onClose: (reason) => closed.push(reason),
+    };
+    try {
+      const intro = host.render(host.exports.Player, props);
+      host.commit();
+      const video = elements(intro).find((node) => node.type === 'video');
+      video.props.onError();
+      if (endEnabled) {
+        const ending = host.render(host.exports.Player, props);
+        assert.equal(ending.props['data-phase'], 'end');
+        assert.deepEqual(closed, []);
+        video.props.onError(); // A delayed event from the stopped video cannot replace the reason.
+        ending.props.onPointerDown({ target: { closest: () => null } });
+      }
+      assert.deepEqual(closed, ['media-error']);
+    } finally {
+      host.reset();
+    }
+  }
+});
+
+test('manual playback failure reaches the ending and reports play-error on close', async () => {
+  const host = componentHost(null, 'zh', {
+    play: async () => {
+      throw Error('decoder failed');
+    },
+  });
+  const closed = [],
+    props = {
+      clip: fixture().clips[0],
+      settings: { videoEnabled: true, endEnabled: true },
+      onClose: (reason) => closed.push(reason),
+    };
+  try {
+    host.render(host.exports.Player, props);
+    host.commit();
+    await flush();
+    const blocked = host.render(host.exports.Player, props);
+    const retry = elements(blocked).find(
+      (node) => node.type === 'button' && text(node) === '▶ 点击播放',
+    );
+    assert.ok(retry);
+    await retry.props.onClick({ stopPropagation() {} });
+    const ending = host.render(host.exports.Player, props);
+    assert.equal(ending.props['data-phase'], 'end');
+    assert.deepEqual(closed, []);
+    ending.props.onCancel({ preventDefault() {} });
+    assert.deepEqual(closed, ['play-error']);
+  } finally {
+    host.reset();
+  }
+});
+
+test('stalled videos and overlong sequences report timeout after their ending screen', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  for (const kind of ['video', 'sequence']) {
+    let elapsed = 0;
+    const host = componentHost(null, 'zh', { performance: { now: () => elapsed } }),
+      closed = [];
+    const props = {
+      clip: { ...fixture().clips[0], kind },
+      settings: { videoEnabled: true, endEnabled: true },
+      onClose: (reason) => closed.push(reason),
+    };
+    try {
+      host.render(host.exports.Player, props);
+      host.commit();
+      elapsed = kind === 'sequence' ? 120000 : 31000;
+      t.mock.timers.tick(kind === 'sequence' ? 120000 : 1000);
+      const ending = host.render(host.exports.Player, props);
+      assert.equal(ending.props['data-phase'], 'end');
+      assert.deepEqual(closed, []);
+      ending.props.onPointerDown({ target: { closest: () => null } });
+      assert.deepEqual(closed, ['timeout']);
+    } finally {
+      host.reset();
+    }
+  }
+});
+
+test('the real BootRoot consumes Player failure after entry and displays a localized notice', async () => {
+  const root = componentHost(null, 'en'),
+    player = componentHost(null, 'en');
+  try {
+    root.render(root.exports.BootRoot, {});
+    root.commit();
+    await flush();
+    root.window.dispatchEvent({
+      type: 'dsh-boot-studio:play',
+      detail: { clip: fixture().clips[0], settings: { videoEnabled: true, endEnabled: true } },
+    });
+    const tree = root.render(root.exports.BootRoot, {});
+    const active = elements(tree).find((node) => node.type === root.exports.Player);
+    assert.ok(active);
+    const intro = player.render(player.exports.Player, active.props);
+    player.commit();
+    elements(intro)
+      .find((node) => node.type === 'video')
+      .props.onError();
+    const ending = player.render(player.exports.Player, active.props);
+    assert.equal(ending.props['data-phase'], 'end');
+    assert.equal(
+      elements(root.render(root.exports.BootRoot, {})).some((node) => node.props.role === 'status'),
+      false,
+    );
+    ending.props.onPointerDown({ target: { closest: () => null } });
+    const entered = root.render(root.exports.BootRoot, {});
+    assert.equal(
+      elements(entered).some((node) => node.type === root.exports.Player),
+      false,
+    );
+    const notice = elements(entered).find((node) => node.props.role === 'status');
+    assert.ok(notice);
+    assert.match(text(notice), /Harness/);
+    assert.doesNotMatch(text(notice), /\p{Script=Han}/u);
+  } finally {
+    player.reset();
+    root.reset();
+  }
+});
+
+test('an uncertain install hides retry while keeping working plugin navigation and never reinstalls', async () => {
+  const host = componentHost(null, 'en');
+  let installs = 0,
+    dismissed = 0,
+    opened;
+  const dispose = host.exports.bindHarnessServices({
+    pluginManager: {
+      installBundle: async () => {
+        installs++;
+        return { ok: false, error: { message: 'connection lost' } };
+      },
+    },
+    pluginNavigation: {
+      openBundle: (name) => {
+        opened = name;
+      },
+    },
+  });
+  const status = {
+    packageName: 'dsh-openup-lewis',
+    currentVersion: '1.3.3',
+    latestVersion: '1.3.4',
+    channelReady: true,
+    available: true,
+  };
+  const sha256 = 'a'.repeat(64),
+    staged = {
+      version: '1.3.4',
+      requiresRestart: true,
+      sha256,
+      spec: `C:/isolated/update-cache/dsh-openup-lewis-1.3.4-${sha256}.tgz`,
+    };
+  const props = {
+    status,
+    request: async (path) =>
+      path === '/updates/prepare' ? staged : { version: '1.3.4', phase: 'ready' },
+    onDismiss: () => {
+      dismissed++;
+    },
+  };
+  try {
+    const first = host.render(host.exports.UpdatePrompt, props);
+    host.commit();
+    const accept = elements(first).find(
+      (node) => node.type === 'button' && text(node) === 'Update to 1.3.4',
+    );
+    await accept.props.onClick();
+    const failed = host.render(host.exports.UpdatePrompt, props);
+    assert.equal(
+      elements(failed).some(
+        (node) => node.type === 'button' && /Retry update|Update to/.test(text(node)),
+      ),
+      false,
+    );
+    const navigation = elements(failed).find(
+      (node) => node.type === 'button' && text(node) === 'Open plugin manager',
+    );
+    assert.ok(navigation);
+    // Even a stale event handler and a reopened prompt cannot resend installation.
+    await accept.props.onClick();
+    assert.equal(installs, 1);
+    navigation.props.onClick();
+    assert.equal(opened, status.packageName);
+    assert.equal(dismissed, 1);
+    host.reset();
+    const reopened = host.render(host.exports.UpdatePrompt, props);
+    host.commit();
+    await elements(reopened)
+      .find((node) => node.type === 'button' && text(node) === 'Update to 1.3.4')
+      .props.onClick();
+    assert.equal(installs, 1);
+    assert.equal(
+      elements(host.render(host.exports.UpdatePrompt, props)).some(
+        (node) => node.type === 'button' && text(node) === 'Retry update',
+      ),
+      false,
+    );
+  } finally {
+    dispose();
+    host.reset();
+  }
+});
+
+test('split modules retain client exports, live shared settings, renderer isolation and launch-once remount behavior', async () => {
+  const host = componentHost(null),
+    otherWindow = componentHost(null);
+  try {
+    for (const name of [
+      'SettingsPanel',
+      'Player',
+      'EndTitle',
+      'playbackStages',
+      'BootRoot',
+      'ShortcutAction',
+      'openSettings',
+      'api',
+    ])
+      assert.equal(typeof host.exports[name], 'function', name);
+    const state = fixture();
+    host.exports.publish(state);
+    assert.equal(host.exports.latestState, state);
+    assert.equal(otherWindow.exports.latestState, null);
+    const first = host.render(host.exports.SettingsPanel, {});
+    assert.equal(
+      elements(first).find((node) => node.type === host.exports.VideoLibrary).props.state,
+      state,
+    );
+    host.commit();
+    assert.equal(host.exports.subscribers.size, 1);
+    host.reset();
+    assert.equal(host.exports.subscribers.size, 0);
+    const changed = fixture({ sound: true });
+    host.exports.publish(changed);
+    const remounted = host.render(host.exports.SettingsPanel, {});
+    assert.equal(
+      elements(remounted).find((node) => node.type === host.exports.VideoLibrary).props.state,
+      changed,
+    );
+    host.reset();
+    for (let count = 0; count < 2; count++) {
+      host.render(host.exports.BootRoot, {});
+      host.commit();
+      await flush();
+      host.reset();
+    }
+    assert.equal(host.requests.filter(([url]) => url.endsWith('/launch')).length, 1);
+    assert.equal(host.requests.filter(([url]) => url.endsWith('/updates/check')).length, 1);
+    assert.equal(host.exports.subscribers.size, 0);
+  } finally {
+    host.reset();
+    otherWindow.reset();
+  }
+});
 
 test('the actual full-preview button always plays video then ending without changing disabled launch preferences', () => {
   for (const [videoEnabled, endEnabled] of [

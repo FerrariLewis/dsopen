@@ -57,7 +57,8 @@ export function UpdatePrompt({
     };
   }, []);
   async function accept() {
-    if (preview || lock.current || completed || !isAvailableUpdate(status)) return;
+    if (preview || lock.current || completed || error?.uncertain || !isAvailableUpdate(status))
+      return;
     lock.current = true;
     setBusy(true);
     setError('');
@@ -254,18 +255,20 @@ export function UpdatePrompt({
               <button type="button" disabled={busy} onClick={close}>
                 {t('稍后再说', 'Later')}
               </button>
-              <button
-                className="bs-startup-update-primary"
-                type="button"
-                disabled={busy}
-                onClick={accept}
-              >
-                {busy
-                  ? t('正在更新…', 'Updating…')
-                  : error
-                    ? t('重试更新', 'Retry update')
-                    : t(`更新到 ${status.latestVersion}`, `Update to ${status.latestVersion}`)}
-              </button>
+              {!error?.uncertain && (
+                <button
+                  className="bs-startup-update-primary"
+                  type="button"
+                  disabled={busy}
+                  onClick={accept}
+                >
+                  {busy
+                    ? t('正在更新…', 'Updating…')
+                    : error
+                      ? t('重试更新', 'Retry update')
+                      : t(`更新到 ${status.latestVersion}`, `Update to ${status.latestVersion}`)}
+                </button>
+              )}
             </>
           )}
         </div>

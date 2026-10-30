@@ -9,16 +9,19 @@ on:
       - 'assets/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
-      - 'scripts/build.mjs'
-      - 'scripts/release.mjs'
-      - 'scripts/build-npm-entry.mjs'
-      - 'scripts/reuse-published-npm.mjs'
-      - 'scripts/check-release-notes.mjs'
-      - 'scripts/verify-build.mjs'
+      - 'pnpm-workspace.yaml'
+      - 'scripts/**'
       - 'tests/**'
       - 'eslint.config.mjs'
       - '.prettierrc.json'
+      - '.prettierignore'
+      - '.gitattributes'
+      - '.gitignore'
+      - 'cordis.patch.yml'
+      - 'LICENSE'
+      - 'THIRD_PARTY_NOTICES.md'
       - '.github/workflows/publish.yml'
+      - '.github/workflows/check.yml'
 
 concurrency:
   group: open-beauty-stable-publish
@@ -28,7 +31,12 @@ permissions:
   contents: write
 
 jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+    permissions:
+      contents: read
   publish:
+    needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -50,11 +58,6 @@ jobs:
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
           node node_modules/esbuild/install.js
-      - name: Check formatting, hooks and runtime regressions
-        run: |
-          pnpm run format:check
-          pnpm run lint
-          pnpm test
       - name: Build and verify the runtime packages
         run: |
           set -euo pipefail
@@ -70,6 +73,7 @@ jobs:
           node scripts/build-npm-entry.mjs --tarball "$PACKAGE_NAME-$VERSION.tgz" --out npm-entry --repo "$GITHUB_REPOSITORY"
           pnpm --dir npm-entry pack --pack-destination "$GITHUB_WORKSPACE"
           node scripts/reuse-published-npm.mjs --tarball "dsh-openup-lewis-$VERSION.tgz"
+          node scripts/verify-package.mjs "$PACKAGE_NAME-$VERSION.tgz" "dsh-openup-lewis-$VERSION.tgz"
       - name: Validate version before changing published data
         id: release
         shell: bash

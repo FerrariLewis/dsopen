@@ -7,8 +7,21 @@ const ARCHIVE =
 const PART = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.part$/;
 const RETRY_FILE = 'cleanup-pending.json';
 const RETRY_MS = 60_000;
+const MAX_RETRY_MS = 60 * RETRY_MS;
+const TRANSIENT_IO = new Set([
+  'EBUSY',
+  'EPERM',
+  'EAGAIN',
+  'EINTR',
+  'EMFILE',
+  'ENFILE',
+  'EIO',
+  'ETIMEDOUT',
+  'ESTALE',
+]);
 const PART_IDLE_MS = 10 * 60_000;
 const pathKey = (value) => resolve(value).toLowerCase();
+const isTransient = (error) => TRANSIENT_IO.has(error?.code);
 
 function hasArchiveReference(text, name) {
   // Windows file: dependencies are case-insensitive. Be equally conservative
@@ -47,6 +60,8 @@ export function createUpdateCache({
   let running,
     retryTimer,
     retryOptions,
+    retrySignature,
+    retryRound = 0,
     disposed = false;
   const protect = (path) => protectedPaths.add(pathKey(path));
   const unprotect = (path) => protectedPaths.delete(pathKey(path));
@@ -60,7 +75,8 @@ export function createUpdateCache({
         else if (item.isSymbolicLink()) throw Error('profile-link');
       }
     } catch (error) {
-      if (error.code !== 'ENOENT') return { error: 'profile-unreadable' };
+      if (error.code !== 'ENOENT')
+        return { error: 'profile-unreadable', retryable: isTransient(error) };
     }
     // Also cover a custom data directory while the plugin runs inside a profile.
     for (
@@ -84,7 +100,8 @@ export function createUpdateCache({
           if (name === 'package.json') JSON.parse(text);
           texts.push(text);
         } catch (error) {
-          if (error.code !== 'ENOENT') return { error: 'profile-unreadable' };
+          if (error.code !== 'ENOENT')
+            return { error: 'profile-unreadable', retryable: isTransient(error) };
         }
       }
     }
@@ -118,17 +135,21 @@ export function createUpdateCache({
     const removed = [],
       pending = [],
       kept = [];
-    let entries;
+    let entries,
+      retryable = false;
     try {
       const info = await io.lstat(cacheDir);
       if (!info.isDirectory() || info.isSymbolicLink()) throw Error('cache-directory-unsafe');
       entries = await io.readdir(cacheDir);
     } catch (error) {
-      if (error.code === 'ENOENT') return { removed, pending, kept };
+      if (error.code === 'ENOENT') return { report: { removed, pending, kept }, retryable };
       return {
-        removed,
-        pending: [{ name: 'update-cache', reason: 'cache-unreadable', attempts: 1 }],
-        kept,
+        report: {
+          removed,
+          pending: [{ name: 'update-cache', reason: 'cache-unreadable', attempts: 1 }],
+          kept,
+        },
+        retryable: isTransient(error),
       };
     }
     let previous = {};
@@ -142,7 +163,8 @@ export function createUpdateCache({
     } catch {
       /* Rebuild the queue from a fresh directory/reference scan. */
     }
-    const defer = (name, reason) =>
+    const defer = (name, reason, transient = false) => {
+      retryable ||= transient;
       pending.push({
         name,
         reason,
@@ -151,6 +173,7 @@ export function createUpdateCache({
           (Number.isSafeInteger(previous[name]) ? previous[name] : 0) + 1,
         ),
       });
+    };
     const references = await referenceFiles();
     const retained = new Set(keepSpecs.map(pathKey));
     for (const name of entries) {
@@ -174,11 +197,11 @@ export function createUpdateCache({
           continue;
         }
         if (part && now() - info.mtimeMs < PART_IDLE_MS) {
-          defer(name, 'download-in-progress');
+          defer(name, 'download-in-progress', true);
           continue;
         }
         if (archive && references.error) {
-          defer(name, references.error);
+          defer(name, references.error, references.retryable);
           continue;
         }
         // Filenames include a content hash; matching the basename is intentionally
@@ -192,7 +215,7 @@ export function createUpdateCache({
         if (archive) {
           const latest = await referenceFiles();
           if (latest.error || latest.texts.some((text) => hasArchiveReference(text, name))) {
-            defer(name, latest.error || 'profile-reference');
+            defer(name, latest.error || 'profile-reference', latest.retryable);
             continue;
           }
         }
@@ -207,48 +230,81 @@ export function createUpdateCache({
           defer(
             name,
             error.code === 'EBUSY' || error.code === 'EPERM' ? 'file-busy' : 'delete-failed',
+            isTransient(error),
           );
       }
     }
     try {
       await persist(pending);
-    } catch {
+    } catch (error) {
       pending.push({ name: RETRY_FILE, reason: 'retry-state-unwritable', attempts: 1 });
+      retryable ||= isTransient(error);
     }
-    return { removed, pending, kept };
+    return { report: { removed, pending, kept }, retryable };
   }
 
-  async function cleanup(options) {
+  function clearRetry() {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+
+  async function runCleanup(options, automatic = false) {
     // Serialize scans so a startup cleanup cannot race an installation ack.
     const previous = running;
     const task = (async () => {
       if (previous) await previous.catch(() => {});
-      return perform(options);
+      // A queued timer uses the latest completed event's installation state.
+      if (automatic) options = retryOptions;
+      const { report, retryable } = await perform(options);
+      retryOptions = options;
+      // References, malformed profiles and unsafe paths need an event recheck,
+      // not a timer. Keep their pending records for startup/prepare/install ack.
+      if (!retryable || disposed) {
+        clearRetry();
+        retryRound = 0;
+        retrySignature = null;
+      } else {
+        const signature = JSON.stringify([
+          options.installedVersion,
+          (options.keepSpecs ?? []).map(pathKey).sort(),
+          report.pending.map(({ name, reason }) => [name, reason]).sort(),
+        ]);
+        const changed = signature !== retrySignature || report.removed.length > 0;
+        if (changed) {
+          retryRound = 0;
+          clearRetry();
+        } else if (automatic) {
+          retryRound = Math.min(6, retryRound + 1);
+          clearRetry();
+        }
+        retrySignature = signature;
+        // Manual checks do not advance backoff or postpone an existing timer.
+        if (!retryTimer) {
+          const delay = Math.min(MAX_RETRY_MS, RETRY_MS * 2 ** retryRound);
+          retryTimer = setTimeout(() => {
+            retryTimer = null;
+            return runCleanup(retryOptions, true).catch(() => {});
+          }, delay);
+          retryTimer.unref?.();
+        }
+      }
+      return report;
     })();
     running = task;
     try {
-      const report = await task;
-      clearTimeout(retryTimer);
-      retryOptions = options;
-      if (report.pending.length && !disposed) {
-        retryTimer = setTimeout(() => {
-          void cleanup(retryOptions).catch(() => {});
-        }, RETRY_MS);
-        retryTimer.unref?.();
-      }
-      return report;
+      return await task;
     } finally {
       if (running === task) running = null;
     }
   }
   return {
     cacheDir,
-    cleanup,
+    cleanup: (options) => runCleanup(options),
     protect,
     unprotect,
     dispose() {
       disposed = true;
-      clearTimeout(retryTimer);
+      clearRetry();
     },
   };
 }

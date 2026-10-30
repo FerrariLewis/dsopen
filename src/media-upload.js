@@ -16,6 +16,8 @@ const TYPES = Object.freeze({
   },
 });
 const cancelled = () => clientError('BOOT_REQUEST_CANCELLED', '请求已取消。');
+// Progress may keep a slow transfer alive, but cannot extend it indefinitely.
+const MAX_UPLOAD_DURATION_MS = 60 * 60 * 1000;
 
 export function validateMediaFile(file, kind, maxBytes = TYPES[kind]?.maxBytes) {
   const type = TYPES[kind];
@@ -110,29 +112,62 @@ function sendMedia(file, kind, { signal, basePath, onProgress, xhrFactory }) {
       return;
     }
     const xhr = xhrFactory();
-    let settled = false;
+    let settled = false,
+      idleTimer,
+      budgetTimer,
+      uploadedBytes = 0,
+      waitingForResponse = false;
+    const idleMs = API_TIMEOUTS[TYPES[kind].timeout];
     const finish = (error, result) => {
       if (settled) return;
       settled = true;
+      clearTimeout(idleTimer);
+      clearTimeout(budgetTimer);
       signal.removeEventListener('abort', abort);
       xhr.onload = xhr.onerror = xhr.ontimeout = xhr.onabort = null;
-      xhr.upload.onprogress = null;
+      xhr.upload.onprogress = xhr.upload.onload = null;
       if (error) reject(error);
       else resolve(result);
     };
-    const abort = () => {
-      xhr.abort();
-      finish(cancelled());
+    const stop = (error) => {
+      if (settled) return;
+      // Some XHR implementations emit onabort synchronously. Settle the intended
+      // reason and detach callbacks before aborting, so timeout stays timeout.
+      finish(error);
+      try {
+        xhr.abort();
+      } catch {
+        /* The result is already final even if a detached transport cannot abort. */
+      }
+    };
+    const abort = () => stop(cancelled());
+    const timeout = () => stop(clientError('BOOT_UPLOAD_TIMEOUT', '上传等待超时，请重试。'));
+    const touch = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(timeout, idleMs);
+    };
+    const waitForResponse = () => {
+      if (settled || waitingForResponse) return;
+      waitingForResponse = true;
+      // After upload completion no more progress event can prolong server wait.
+      touch();
     };
     signal.addEventListener('abort', abort, { once: true });
     xhr.open('POST', basePath + TYPES[kind].path);
     xhr.setRequestHeader('x-dsh-boot-studio', '1');
     xhr.setRequestHeader('x-file-name', encodeURIComponent(file.name));
     xhr.setRequestHeader('content-type', file.type || 'application/octet-stream');
-    xhr.timeout = API_TIMEOUTS[TYPES[kind].timeout];
     xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+      if (settled || waitingForResponse || !Number.isFinite(event.loaded)) return;
+      const loaded = Math.min(file.size, Math.max(0, event.loaded));
+      if (loaded <= uploadedBytes) return;
+      uploadedBytes = loaded;
+      touch();
+      if (event.lengthComputable && Number.isFinite(event.total) && event.total > 0)
+        onProgress?.(Math.min(100, Math.round((loaded / event.total) * 100)));
+      if (loaded === file.size) waitForResponse();
     };
+    xhr.upload.onload = waitForResponse;
     xhr.onload = () => {
       try {
         finish(
@@ -147,9 +182,11 @@ function sendMedia(file, kind, { signal, basePath, onProgress, xhrFactory }) {
       }
     };
     xhr.onerror = () => finish(clientError('BOOT_UPLOAD_INTERRUPTED', '上传中断，请重试。'));
-    xhr.ontimeout = () => finish(clientError('BOOT_UPLOAD_TIMEOUT', '上传等待超时，请重试。'));
+    xhr.ontimeout = timeout;
     xhr.onabort = () => finish(cancelled());
     try {
+      touch();
+      budgetTimer = setTimeout(timeout, MAX_UPLOAD_DURATION_MS);
       xhr.send(file);
     } catch {
       finish(clientError('BOOT_UPLOAD_INTERRUPTED', '上传中断，请重试。'));

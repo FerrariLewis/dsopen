@@ -11,7 +11,9 @@ export function readHostLocale(doc = globalThis.document) {
   try {
     const active = language(service?.getSnapshot?.().active);
     if (active) return active;
-  } catch {}
+  } catch {
+    // Fall back to the document language while the host service is unavailable.
+  }
   return language(doc?.documentElement?.lang) || 'zh';
 }
 

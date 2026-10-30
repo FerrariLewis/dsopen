@@ -29,6 +29,7 @@ function property(style, name) {
   return style?.getPropertyValue(name).trim() || '';
 }
 function safeColor(view, value, fallback) {
+  // eslint-disable-next-line no-control-regex -- Reject unsafe characters before interpreting a host color.
   if (!value || /[;{}<>\u0000-\u001f]/.test(value)) return fallback;
   return !view?.CSS?.supports || view.CSS.supports('color', value) ? value : fallback;
 }
@@ -115,7 +116,9 @@ function createStore(doc) {
     for (const listener of [...listeners]) {
       try {
         listener();
-      } catch {}
+      } catch {
+        // Appearance subscribers must remain independent of one another.
+      }
     }
   }
   function schedule() {

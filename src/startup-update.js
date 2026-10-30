@@ -88,6 +88,7 @@ function absoluteArchivePath(spec) {
   return (
     typeof spec === 'string' &&
     spec.length < 8192 &&
+    // eslint-disable-next-line no-control-regex -- Installer paths must exclude embedded control characters.
     !/[\u0000-\u001f\u007f]/.test(spec) &&
     (/^[A-Za-z]:[\\/]/.test(spec) ||
       /^\/(?!\/)/.test(spec) ||

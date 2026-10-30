@@ -5,7 +5,7 @@ import { CloseIcon } from './close-icon.jsx';
 import { useI18n, localizeMessage } from './i18n.jsx';
 
 /** Confirmation only: the parent owns the authenticated reset request. */
-export function ResetDialog({ settings = {}, onCancel, onConfirm }) {
+export function ResetDialog({ onCancel, onConfirm }) {
   const t = useI18n();
   useStudioStyles();
   const appearance = useEnchantAppearance();

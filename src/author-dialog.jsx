@@ -5,7 +5,7 @@ import { CloseIcon } from './close-icon.jsx';
 import { useI18n } from './i18n.jsx';
 import { BASE_PATH } from './constants.js';
 
-export function AuthorDialog({ settings = {}, onClose }) {
+export function AuthorDialog({ onClose }) {
   const t = useI18n();
   useStudioStyles();
   const appearance = useEnchantAppearance();
