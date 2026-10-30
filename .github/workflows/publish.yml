@@ -12,6 +12,7 @@ on:
       - 'scripts/build.mjs'
       - 'scripts/release.mjs'
       - 'scripts/build-npm-entry.mjs'
+      - 'scripts/reuse-published-npm.mjs'
       - 'scripts/check-release-notes.mjs'
       - 'scripts/verify-build.mjs'
       - 'tests/**'
@@ -68,6 +69,7 @@ jobs:
           PACKAGE_NAME=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).name")
           node scripts/build-npm-entry.mjs --tarball "$PACKAGE_NAME-$VERSION.tgz" --out npm-entry --repo "$GITHUB_REPOSITORY"
           pnpm --dir npm-entry pack --pack-destination "$GITHUB_WORKSPACE"
+          node scripts/reuse-published-npm.mjs --tarball "dsh-openup-lewis-$VERSION.tgz"
       - name: Validate version before changing published data
         id: release
         shell: bash

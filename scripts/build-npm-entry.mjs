@@ -14,7 +14,7 @@ const CLIENT_HEADER = `window.__ModuleLoader__.load({ id: "${CORE_PACKAGE_NAME}"
 const NPM_CLIENT_HEADER = `window.__ModuleLoader__.load({ id: "${NPM_PACKAGE_NAME}", factory:`;
 
 /** Extract only bounded regular files in memory: never materialize archive links. */
-function regularFiles(compressed) {
+export function regularFiles(compressed) {
   const tar = gunzipSync(compressed, { maxOutputLength: 160 * 1024 * 1024 });
   const files = new Map();
   const paths = new Set();
@@ -57,6 +57,10 @@ function regularFiles(compressed) {
         }
         at += length;
       }
+      continue;
+    }
+    if (type === 'L') {
+      pendingPath = safeArchivePath(body.toString('utf8').split('\0')[0]);
       continue;
     }
     const archivePath = safeArchivePath(pendingPath ?? globalPath ?? rawPath);
