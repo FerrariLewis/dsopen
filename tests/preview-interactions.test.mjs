@@ -422,9 +422,9 @@ test('image preview/selection have distinct English accessible names, selected s
     assert.match(selected.props.className, /bs-selected/);
     assert.equal(
       text(byLabel(tree, 'Use built-in ending screen Black and Gold')),
-      'Use this animation',
+      'Use this screen',
     );
-    assert.equal(text(byLabel(tree, 'Use ending image My Holiday 原图')), 'Use this animation');
+    assert.equal(text(byLabel(tree, 'Use ending image My Holiday 原图')), 'Use this screen');
     assert.ok(byLabel(tree, 'Preview ending image My Holiday 原图'));
     host.reset();
     const busyTree = host.render(host.exports.EndingSettings, { ...props, busy: true });

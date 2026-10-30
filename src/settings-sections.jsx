@@ -209,8 +209,8 @@ export function EndingSettings({
                       onClick={() => save({ endScreen: 'logo', logoVariant: logo.id })}
                     >
                       {selected
-                        ? t('✓ 当前动画', '✓ Selected')
-                        : t('使用此动画', 'Use this animation')}
+                        ? t('✓ 当前画面', '✓ Selected')
+                        : t('使用此画面', 'Use this screen')}
                     </button>
                   </div>
                 </article>
@@ -295,8 +295,8 @@ export function EndingSettings({
                     onClick={() => save({ endImageId: image.id, endScreen: 'image' })}
                   >
                     {settings.endScreen === 'image' && settings.endImageId === image.id
-                      ? t('✓ 当前动画', '✓ Selected')
-                      : t('使用此动画', 'Use this animation')}
+                      ? t('✓ 当前画面', '✓ Selected')
+                      : t('使用此画面', 'Use this screen')}
                   </button>
                   {pendingImageDelete !== image.id && (
                     <button
