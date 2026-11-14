@@ -54,6 +54,8 @@
 
 如果愿意帮助作者了解插件使用情况，可在插件设置最后一行点击“与开发者共享数据”，阅读说明后自行选择开启。数据共享默认关闭，不影响任何插件功能，可随时停止并请求删除。
 
+我们努力让更多人拥有更好的体验。但十分抱歉，由于种种原因，目前支持使用“与开发者共享数据”功能，仅限OpenAI支持的地区。详见：[OpenAI官方说明](https://help.openai.com/en/articles/7947663-chatgpt-supported-countries?utm_source=chatgpt.com)
+
 ## 产品基本信息
 
 | 项目 | 信息 |
@@ -63,7 +65,7 @@
 | 插件名称 | dsh-openup-lewis |
 | 作者 | 周奕辰 |
 | npm 当前版本 | 以[官方 npm 包页面](https://www.npmjs.com/package/dsh-openup-lewis)为准；安装和更新均以 npm `latest` 为准。 |
-| 最新版本 | v1.4.2 |
+| 最新版本 | v1.4.3 |
 | 适用版本 | DeepSeek Harness ≥ 0.2.1-rc.2 且 < 0.3.0 |
 | 桌面平台 | Windows / macOS；已完成跨平台代码检查及 Chromium 播放验证，macOS 尚未进行真机测试|
 | 窗口按钮 | 当前 Harness 桌面版尚未提供插件单独隐藏原生关闭、最大化、最小化按钮的接口。因此无法做到完美适配全屏幕|

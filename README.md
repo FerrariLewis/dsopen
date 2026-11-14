@@ -54,6 +54,8 @@ Only the author can access this dashboard by signing in with their own OpenAI / 
 
 To help the author understand plugin usage, select “Share data with the developer” on the last row of plugin settings and read the notice before choosing to enable it. Sharing is off by default, does not affect any plugin features, and can be stopped with a deletion request at any time.
 
+We strive to offer more people a better experience. However, we apologize that, for various reasons, the “Share data with the developer” feature is currently available only in regions supported by OpenAI. For details, see [OpenAI’s official guidance](https://help.openai.com/en/articles/7947663-chatgpt-supported-countries?utm_source=chatgpt.com).
+
 ## Plugin Information
 
 | Item | Details |
@@ -63,7 +65,7 @@ To help the author understand plugin usage, select “Share data with the develo
 | Plugin name | dsh-openup-lewis |
 | Author | Zhou Yichen (周奕辰) |
 | Current npm version | See the [official npm package page](https://www.npmjs.com/package/dsh-openup-lewis); installations and updates follow npm `latest`. |
-| Latest version | v1.4.2 |
+| Latest version | v1.4.3 |
 | Supported version | DeepSeek Harness ≥ 0.2.1-rc.2 and < 0.3.0 |
 | Desktop platforms | Windows / macOS. Cross-platform code checks and Chromium playback validation have been completed. Testing on a physical Mac has not yet been performed. |
 | Window controls | The current Harness desktop app does not provide an API that allows individual plugins to hide the native close, maximize, and minimize buttons, so a completely seamless full-screen experience is not currently possible. |
