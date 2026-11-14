@@ -153,7 +153,7 @@ export function DataSharingDialog({ onClose, onStatus }) {
       data-testid="data-sharing-dialog"
       {...appearance}
       aria-labelledby="bs-sharing-title"
-      aria-describedby="bs-sharing-description"
+      aria-describedby="bs-sharing-description bs-sharing-region"
       aria-busy={busy}
       onCancel={(event) => {
         event.preventDefault();
@@ -177,6 +177,12 @@ export function DataSharingDialog({ onClose, onStatus }) {
           {t(
             '由 FerrariLewis 接收，用于了解插件使用规模和版本分布。默认关闭，拒绝不会影响任何插件功能。',
             'FerrariLewis receives this data to understand plugin usage and version distribution. Sharing is off by default and is optional.',
+          )}
+        </p>
+        <p id="bs-sharing-region" className="bs-sharing-unconfigured">
+          {t(
+            'OpenAI不支持的地区，与开发者共享数据暂不可用。',
+            'Sharing data with the developer is currently unavailable in regions not supported by OpenAI.',
           )}
         </p>
         <div className="bs-sharing-notice">
