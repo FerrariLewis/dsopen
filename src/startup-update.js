@@ -418,7 +418,18 @@ export async function prepareAndInstallUpdate(
           assertActive();
           task.stopPolling();
           emit('install');
-          emitProgress({ ...task.progress, phase: 'install', percent: null });
+          emitProgress({
+            ...task.progress,
+            // A verified cache hit may finish before the first progress poll.
+            // Prefer the prepared archive's measured size without requiring new
+            // fields from an older backend that still serves this client.
+            ...(Number.isSafeInteger(staged.bytes) && staged.bytes > 0
+              ? { downloadedBytes: staged.bytes, totalBytes: staged.bytes }
+              : {}),
+            ...(typeof staged.fromCache === 'boolean' ? { fromCache: staged.fromCache } : {}),
+            phase: 'install',
+            percent: null,
+          });
           // A synchronous observer can dispose the plugin while the stage changes.
           assertActive();
           task.installStarted = true;

@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import {
+  lstat,
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  truncate,
+  utimes,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -9,12 +20,14 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { setImmediate as yieldTurn } from 'node:timers/promises';
 import {
   createUpdateService,
   readPackageManifest,
   readPackageManifestAsync,
   validateNpmManifest,
 } from '../src/updates.js';
+import { MAX_PACKAGE_BYTES } from '../src/constants.js';
 import {
   packageManifest,
   tarEntry,
@@ -85,16 +98,370 @@ test('prepare hashes GitHub bytes once and npm bytes once per integrity algorith
   }
 });
 
-async function fixture(t, fetchImpl, { current = '1.3.0' } = {}) {
+async function fixture(t, fetchImpl, { current = '1.3.0', name = 'dsh-openup-lewis' } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'lewis-updates-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const dataDir = join(root, 'boot-studio'),
     packageFile = join(root, 'package.json');
-  await writeFile(packageFile, JSON.stringify(packageManifest(current)));
+  await writeFile(packageFile, JSON.stringify(packageManifest(current, { name })));
   const service = createUpdateService({ dataDir, packageFile, fetchImpl });
   t.after(() => service.dispose());
   return { root, dataDir, packageFile, service };
 }
+
+function sourceMetadata(source, pkg, bytes) {
+  return source === 'npm'
+    ? npmMetadata(pkg, bytes)
+    : {
+        format: 1,
+        packageName: pkg.name,
+        version: pkg.version,
+        commit: 'a'.repeat(40),
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+        bytes: bytes.length,
+        publishTimestamp: 1,
+        requiresRestart: true,
+        releaseNotes: pkg.lewisEnchantRelease,
+        releaseNotesEn: pkg.lewisEnchantReleaseEn,
+        tarballUrl: `https://github.com/FerrariLewis/open/releases/download/v${pkg.version}/${pkg.name}-${pkg.version}.tgz`,
+      };
+}
+
+async function cacheFixture(t, source) {
+  const pkg = packageManifest('1.3.1', {
+    name: source === 'npm' ? 'dsh-openup-lewis' : 'dsh-boot-studio',
+  });
+  const bytes = archive(pkg);
+  const requests = { metadata: 0, archive: 0 };
+  const remote = { metadata: sourceMetadata(source, pkg, bytes), bytes };
+  const context = await fixture(
+    t,
+    async (url) => {
+      const isArchive = url.endsWith('.tgz');
+      requests[isArchive ? 'archive' : 'metadata']++;
+      return new Response(isArchive ? remote.bytes : JSON.stringify(remote.metadata));
+    },
+    { name: pkg.name },
+  );
+  const cacheDir = join(context.dataDir, 'update-cache');
+  return { ...context, pkg, bytes, requests, remote, cacheDir };
+}
+
+for (const source of ['npm', 'github']) {
+  test(`${source} retries recheck metadata and reuse the exact validated cache without rewriting it`, async (t) => {
+    const { service, pkg, bytes, requests, packageFile, dataDir } = await cacheFixture(t, source);
+    const first = await service.prepare(pkg.version);
+    assert.equal(first.fromCache, false);
+    assert.equal(first.bytes, bytes.length);
+    assert.equal(service.progress().fromCache, false);
+    // An old timestamp makes an unnecessary rewrite observable on all platforms.
+    await utimes(first.spec, new Date('2020-01-01'), new Date('2020-01-01'));
+    const original = await lstat(first.spec);
+    const second = await service.prepare(pkg.version);
+    assert.equal(second.fromCache, true);
+    assert.equal(second.spec, first.spec);
+    assert.equal(second.sha256, first.sha256);
+    assert.equal(second.bytes, bytes.length);
+    assert.deepEqual(requests, { metadata: 2, archive: 1 });
+    const after = await lstat(second.spec);
+    assert.equal(after.ino, original.ino);
+    assert.equal(after.mtimeMs, original.mtimeMs);
+    assert.equal(service.progress().phase, 'ready');
+    assert.equal(service.progress().fromCache, true);
+    assert.equal(service.progress().downloadedBytes, bytes.length);
+    assert.equal(service.progress().totalBytes, bytes.length);
+    assert.equal(service.progress().attempt, 0);
+    assert.equal(service.progress().percent, 100);
+    assert.deepEqual(await readFile(second.spec), bytes);
+    assert.equal((await service.cleanup()).removed.length, 0);
+    // A new host process can also reuse the artifact, without an in-memory promise.
+    const restarted = createUpdateService({
+      dataDir,
+      packageFile,
+      fetchImpl: async (url) => {
+        assert.ok(!url.endsWith('.tgz'), 'a verified cached installer needs no archive request');
+        return new Response(JSON.stringify(sourceMetadata(source, pkg, bytes)));
+      },
+    });
+    t.after(() => restarted.dispose());
+    assert.equal((await restarted.prepare(pkg.version)).fromCache, true);
+  });
+
+  test(`${source} corrupted or oversized cached bytes fall back to a newly verified download`, async (t) => {
+    for (const mode of ['corrupt', 'oversize']) {
+      const { service, pkg, bytes, requests } = await cacheFixture(t, source);
+      const first = await service.prepare(pkg.version);
+      if (mode === 'corrupt') await writeFile(first.spec, Buffer.from('damaged cache'));
+      else await truncate(first.spec, MAX_PACKAGE_BYTES + 1);
+      const retry = await service.prepare(pkg.version);
+      assert.equal(retry.fromCache, false, mode);
+      assert.equal(retry.bytes, bytes.length);
+      assert.deepEqual(requests, { metadata: 2, archive: 2 });
+      assert.deepEqual(await readFile(retry.spec), bytes);
+      assert.equal(service.progress().fromCache, false);
+    }
+  });
+
+  test(`${source} cache identity and fresh remote integrity override previously staged bytes`, async (t) => {
+    const { service, pkg, requests, remote, cacheDir } = await cacheFixture(t, source);
+    const first = await service.prepare(pkg.version);
+    // The same version's trusted metadata must be fetched again, not cached in memory.
+    remote.bytes = archive(pkg, [tarEntry('package/new-content.txt', 'changed')]);
+    remote.metadata = sourceMetadata(source, pkg, remote.bytes);
+    const second = await service.prepare(pkg.version);
+    assert.equal(second.fromCache, false);
+    assert.notEqual(second.sha256, first.sha256);
+    assert.deepEqual(await readFile(second.spec), remote.bytes);
+    assert.deepEqual(requests, { metadata: 2, archive: 2 });
+    // A valid package under a forged content-hash filename must never be reused.
+    await rm(second.spec);
+    await writeFile(
+      join(cacheDir, `${pkg.name}-${pkg.version}-${'0'.repeat(64)}.tgz`),
+      remote.bytes,
+    );
+    assert.equal((await service.prepare(pkg.version)).fromCache, false);
+    assert.equal(requests.archive, 3);
+  });
+
+  test(`${source} rejects an obsolete target even when its cached installer is valid`, async (t) => {
+    const { service, pkg, requests, remote } = await cacheFixture(t, source);
+    await service.prepare(pkg.version);
+    const newer = packageManifest('1.3.2', { name: pkg.name });
+    remote.bytes = archive(newer);
+    remote.metadata = sourceMetadata(source, newer, remote.bytes);
+    await assert.rejects(service.prepare(pkg.version), { code: 'BOOT_UPDATE_INVALID' });
+    assert.deepEqual(requests, { metadata: 2, archive: 1 });
+    assert.equal(service.progress().fromCache, false);
+  });
+
+  test(`${source} protects the candidate while asynchronous cache verification and cleanup overlap`, async (t) => {
+    const { service, pkg, bytes, packageFile, dataDir } = await cacheFixture(t, source);
+    const first = await service.prepare(pkg.version);
+    const restarted = createUpdateService({
+      dataDir,
+      packageFile,
+      fetchImpl: async (url) => {
+        assert.ok(!url.endsWith('.tgz'));
+        return new Response(JSON.stringify(sourceMetadata(source, pkg, bytes)));
+      },
+    });
+    t.after(() => restarted.dispose());
+    const preparing = restarted.prepare(pkg.version);
+    // digest() yields after a chunk; initiate cleanup only once verification owns
+    // the candidate, without relying on timers or the earlier service's state.
+    while (!['verifying', 'ready', 'error'].includes(restarted.progress().phase)) await yieldTurn();
+    const cleanup = restarted.cleanup();
+    const [second, report] = await Promise.all([preparing, cleanup]);
+    assert.equal(second.fromCache, true);
+    assert.equal(second.spec, first.spec);
+    assert.equal(report.removed.length, 0);
+    assert.deepEqual(await readFile(second.spec), bytes);
+  });
+
+  test(`${source} never reuses another package or version's cached archive`, async (t) => {
+    const { service, pkg, bytes, requests, cacheDir } = await cacheFixture(t, source);
+    await mkdir(cacheDir, { recursive: true });
+    const otherName = pkg.name === 'dsh-openup-lewis' ? 'dsh-boot-studio' : 'dsh-openup-lewis';
+    await writeFile(join(cacheDir, archiveName('1.3.1', bytes, otherName)), bytes);
+    await writeFile(join(cacheDir, archiveName('1.3.0', bytes, pkg.name)), bytes);
+    const staged = await service.prepare(pkg.version);
+    assert.equal(staged.fromCache, false);
+    assert.deepEqual(requests, { metadata: 1, archive: 1 });
+  });
+
+  test(`${source} cached archives receive all TAR, package and release-note checks before reuse`, async (t) => {
+    const modes = ['traversal', 'name', 'version', 'patch', 'script', 'notes', 'english-notes'];
+    if (source === 'npm') modes.push('dependency', 'repository');
+    for (const mode of modes) {
+      const { service, pkg, requests, remote, cacheDir } = await cacheFixture(t, source);
+      const changed = {
+        ...pkg,
+        ...(mode === 'name' ? { name: 'unrelated-package' } : {}),
+        ...(mode === 'version' ? { version: '1.3.9' } : {}),
+        ...(mode === 'patch' ? { dsh: { bundle: { patch: '../outside.yml' } } } : {}),
+        ...(mode === 'script' ? { scripts: { postinstall: 'evil' } } : {}),
+        ...(mode === 'notes'
+          ? { lewisEnchantRelease: { version: pkg.version, notes: 'different release notes' } }
+          : {}),
+        ...(mode === 'english-notes'
+          ? { lewisEnchantReleaseEn: { version: pkg.version, notes: 'Unexpected change.' } }
+          : {}),
+        ...(mode === 'dependency' ? { dependencies: { unexpected: '*' } } : {}),
+        ...(mode === 'repository' ? { repository: 'https://github.com/another/project' } : {}),
+      };
+      remote.bytes = archive(
+        changed,
+        mode === 'traversal' ? [tarEntry('package/../../escape', 'unsafe')] : [],
+      );
+      // Even matching current publisher integrity cannot bypass package safety.
+      remote.metadata = sourceMetadata(source, pkg, remote.bytes);
+      await mkdir(cacheDir, { recursive: true });
+      await writeFile(
+        join(cacheDir, archiveName(pkg.version, remote.bytes, pkg.name)),
+        remote.bytes,
+      );
+      await assert.rejects(service.prepare(pkg.version), (error) => {
+        assert.ok(String(error.code).startsWith('BOOT_UPDATE_'), mode);
+        return true;
+      });
+      assert.deepEqual(requests, { metadata: 1, archive: 1 }, mode);
+      assert.equal(service.progress().phase, 'error');
+      assert.equal(service.progress().fromCache, false);
+    }
+  });
+
+  test(`${source} rejects a directory masquerading as a cached installer`, async (t) => {
+    const { service, pkg, bytes, requests, cacheDir } = await cacheFixture(t, source);
+    const fake = join(cacheDir, archiveName(pkg.version, bytes, pkg.name));
+    await mkdir(fake, { recursive: true });
+    await writeFile(join(fake, 'preserve.txt'), 'untouched');
+    await assert.rejects(service.prepare(pkg.version), { code: 'BOOT_UPDATE_CACHE' });
+    assert.deepEqual(requests, { metadata: 1, archive: 1 });
+    assert.equal(await readFile(join(fake, 'preserve.txt'), 'utf8'), 'untouched');
+  });
+
+  test(`${source} never reuses or overwrites a symlinked cached installer`, async (t) => {
+    const { root, service, pkg, bytes, requests, cacheDir } = await cacheFixture(t, source);
+    const outside = join(root, 'outside.tgz');
+    const linked = join(cacheDir, archiveName(pkg.version, bytes, pkg.name));
+    await writeFile(outside, bytes);
+    await mkdir(cacheDir, { recursive: true });
+    try {
+      await symlink(outside, linked, 'file');
+    } catch (error) {
+      if (error.code === 'EPERM' || error.code === 'EACCES') {
+        t.skip('creating file symlinks requires an OS privilege unavailable to this test');
+        return;
+      }
+      throw error;
+    }
+    await assert.rejects(service.prepare(pkg.version), { code: 'BOOT_UPDATE_CACHE' });
+    assert.deepEqual(requests, { metadata: 1, archive: 1 });
+    assert.deepEqual(await readFile(outside), bytes);
+    assert.equal((await lstat(linked)).isSymbolicLink(), true);
+  });
+
+  test(`${source} refuses a symlinked cache directory before reading or downloading archives`, async (t) => {
+    const { root, dataDir, service, pkg, bytes, requests, cacheDir } = await cacheFixture(
+      t,
+      source,
+    );
+    const outside = join(root, 'outside');
+    await mkdir(outside);
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(join(outside, archiveName(pkg.version, bytes, pkg.name)), bytes);
+    try {
+      await symlink(outside, cacheDir, process.platform === 'win32' ? 'junction' : 'dir');
+    } catch (error) {
+      if (error.code === 'EPERM' || error.code === 'EACCES') {
+        t.skip('creating directory links requires an OS privilege unavailable to this test');
+        return;
+      }
+      throw error;
+    }
+    await assert.rejects(service.prepare(pkg.version), { code: 'BOOT_UPDATE_CACHE' });
+    assert.deepEqual(requests, { metadata: 1, archive: 0 });
+    assert.deepEqual(await readdir(outside), [archiveName(pkg.version, bytes, pkg.name)]);
+  });
+}
+
+test('GitHub cached integrity includes the exact manifest byte count', async (t) => {
+  const { service, pkg, requests, remote } = await cacheFixture(t, 'github');
+  await service.prepare(pkg.version);
+  remote.metadata.bytes++;
+  await assert.rejects(service.prepare(pkg.version), { code: 'BOOT_UPDATE_INTEGRITY' });
+  assert.deepEqual(requests, { metadata: 2, archive: 2 });
+  assert.equal(service.progress().fromCache, false);
+});
+
+test('prepare waits for a previously submitted cleanup unlink before accepting a cache candidate', async () => {
+  // Patch built-in I/O only in a child. The first cleanup has submitted unlink,
+  // but deletion waits until prepare requests its own cleanup. This reproduces
+  // the late-protect race deterministically without timing-dependent sleeps.
+  const program = `
+    import fs from 'node:fs/promises';
+    import { syncBuiltinESMExports } from 'node:module';
+    import { tmpdir } from 'node:os';
+    import { join } from 'node:path';
+    import { createHash } from 'node:crypto';
+    import { createUpdateService } from ${JSON.stringify(new URL('../src/updates.js', import.meta.url).href)};
+    import { archive, archiveName, npmMetadata, packageManifest } from ${JSON.stringify(new URL('./update-fixtures.mjs', import.meta.url).href)};
+    const original = { readFile: fs.readFile, unlink: fs.unlink };
+    const results = [];
+    for (const source of ['npm', 'github']) {
+      const root = await fs.mkdtemp(join(tmpdir(), 'lewis-cache-unlink-'));
+      let service, releaseDeletion;
+      try {
+        const name = source === 'npm' ? 'dsh-openup-lewis' : 'dsh-boot-studio';
+        const pkg = packageManifest('1.3.1', { name });
+        const bytes = archive(pkg);
+        const packageFile = join(root, 'package.json');
+        const dataDir = join(root, 'data');
+        const cacheDir = join(dataDir, 'update-cache');
+        const cached = join(cacheDir, archiveName(pkg.version, bytes, name));
+        await fs.mkdir(cacheDir, { recursive: true });
+        await fs.writeFile(packageFile, JSON.stringify(packageManifest('1.3.0', { name })));
+        await fs.writeFile(cached, bytes);
+        const metadata = source === 'npm' ? npmMetadata(pkg, bytes) : {
+          format: 1, packageName: name, version: pkg.version, commit: 'a'.repeat(40),
+          sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length,
+          publishTimestamp: 1, requiresRestart: true, releaseNotes: pkg.lewisEnchantRelease,
+          tarballUrl: 'https://github.com/FerrariLewis/open/releases/download/v1.3.1/dsh-boot-studio-1.3.1.tgz',
+        };
+        let signalDeletion, deletionStarted = false, identities = 0, downloads = 0;
+        const deletionEntered = new Promise(resolve => { signalDeletion = resolve; });
+        const blocked = new Promise(resolve => { releaseDeletion = resolve; });
+        fs.unlink = async (...args) => {
+          if (args[0] === cached && !deletionStarted) {
+            deletionStarted = true;
+            signalDeletion();
+            await blocked;
+          }
+          return original.unlink(...args);
+        };
+        fs.readFile = async (...args) => {
+          const result = await original.readFile(...args);
+          // Reads 1/2 belong to the old cleanup and prepare's metadata check.
+          // Read 3 is prepare requesting the cleanup queue drain.
+          if (args[0] === packageFile && ++identities === 3) releaseDeletion();
+          return result;
+        };
+        syncBuiltinESMExports();
+        service = createUpdateService({
+          dataDir, packageFile,
+          fetchImpl: async url => {
+            if (url.endsWith('.tgz')) { downloads++; return new Response(bytes); }
+            return new Response(JSON.stringify(metadata));
+          },
+        });
+        const cleaning = service.cleanup();
+        await deletionEntered;
+        const staged = await service.prepare(pkg.version);
+        await cleaning;
+        results.push({ source, fromCache: staged.fromCache, downloads,
+          unchanged: (await original.readFile(staged.spec)).equals(bytes) });
+      } finally {
+        releaseDeletion?.();
+        fs.readFile = original.readFile;
+        fs.unlink = original.unlink;
+        syncBuiltinESMExports();
+        service?.dispose();
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }
+    process.stdout.write(JSON.stringify(results));
+  `;
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    ['--input-type=module', '-e', program],
+    { timeout: 10_000 },
+  );
+  for (const result of JSON.parse(stdout)) {
+    assert.equal(result.fromCache, false, result.source);
+    assert.equal(result.downloads, 1, result.source);
+    assert.equal(result.unchanged, true, result.source);
+  }
+});
 
 /** Real HTTP/undici transport: encoded header length differs from decoded body. */
 async function gzipRegistryFixture(

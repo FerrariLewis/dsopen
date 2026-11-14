@@ -469,3 +469,36 @@ test('active downloads are protected and fresh orphan partials are queued until 
   report = await cache.cleanup({ installedVersion: '1.3.1' });
   assert.deepEqual(report.removed, [part]);
 });
+
+test('current or protected installers and partial downloads do not scan unrelated profile locks', async (t) => {
+  const profileReads = [];
+  const { root, cache, cacheDir } = await fixture(t, {
+    fs: {
+      readFile: async (path, ...args) => {
+        if (path.endsWith('package.json') || path.endsWith('.yaml')) profileReads.push(path);
+        return readFile(path, ...args);
+      },
+    },
+  });
+  const profile = join(root, 'profiles', 'desktop');
+  await mkdir(profile, { recursive: true });
+  await writeFile(join(profile, 'package.json'), '{}');
+  await writeFile(join(profile, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n');
+  for (const name of [currentArchive, oldArchive, part, 'another-plugin.tgz'])
+    await writeFile(join(cacheDir, name), 'cached bytes');
+  await utimes(join(cacheDir, part), new Date(0), new Date(0));
+  cache.protect(join(cacheDir, oldArchive));
+  const report = await cache.cleanup({ installedVersion: '1.3.1' });
+  assert.deepEqual(profileReads, []);
+  assert.deepEqual(report.removed, [part]);
+  assert.deepEqual(new Set(report.kept), new Set([currentArchive, oldArchive]));
+
+  cache.unprotect(join(cacheDir, oldArchive));
+  const next = await cache.cleanup({ installedVersion: '1.3.1' });
+  assert.deepEqual(next.removed, [oldArchive]);
+  assert.equal(
+    profileReads.filter((path) => path.endsWith('package.json')).length,
+    2,
+    'an eligible archive still requires both the initial scan and the immediate pre-delete scan',
+  );
+});

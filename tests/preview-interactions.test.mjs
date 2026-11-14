@@ -6,7 +6,7 @@ import { build } from 'esbuild';
 
 const built = await build({
   stdin: {
-    contents: `export { SettingsPanel, Player, EndTitle, playbackStages, BootRoot, ShortcutAction, openSettings, api } from './src/client.jsx'; export { EndingSettings, VideoLibrary } from './src/settings-sections.jsx'; export { UpdatePrompt } from './src/update-prompt.jsx'; export { bindHarnessServices } from './src/startup-update.js'; export { latestState, subscribers, publish } from './src/studio-state.js';`,
+    contents: `export { SettingsPanel, Player, EndTitle, playbackStages, BootRoot, ShortcutAction, openSettings, api } from './src/client.jsx'; export { EndingSettings, VideoLibrary } from './src/settings-sections.jsx'; export { UpdatePrompt } from './src/update-prompt.jsx'; export { UpdateProgress } from './src/update-progress.jsx'; export { bindHarnessServices } from './src/startup-update.js'; export { latestState, subscribers, publish } from './src/studio-state.js';`,
     resolveDir: fileURLToPath(new URL('..', import.meta.url)),
   },
   bundle: true,
@@ -348,6 +348,77 @@ test('the real BootRoot consumes Player failure after entry and displays a local
   } finally {
     player.reset();
     root.reset();
+  }
+});
+
+test('real update progress displays measured decimal MB and exact bytes without inventing unknown percentages', () => {
+  for (const language of ['zh', 'en']) {
+    const host = componentHost(null, language);
+    try {
+      const tree = host.render(host.exports.UpdateProgress, {
+        progress: { phase: 'downloading', downloadedBytes: 52394635, totalBytes: 52394635 },
+      });
+      assert.match(text(tree), /52\.39 MB \/ 52\.39 MB/);
+      const detail = elements(tree).find(
+        (node) => node.props.className === 'bs-update-progress-detail',
+      );
+      assert.match(detail.props.title, /52394635 \/ 52394635/);
+      assert.equal(elements(tree).find((node) => node.type === 'progress').props.value, 99);
+      for (const totalBytes of [null, undefined, 0, Number.NaN]) {
+        const unknown = host.render(host.exports.UpdateProgress, {
+          progress: { phase: 'downloading', downloadedBytes: 52394635, totalBytes, percent: 75 },
+        });
+        assert.match(text(unknown), /52\.39 MB/);
+        assert.doesNotMatch(text(unknown), /%/);
+        assert.equal(
+          elements(unknown).find((node) => node.type === 'progress').props.value,
+          undefined,
+        );
+      }
+    } finally {
+      host.reset();
+    }
+  }
+});
+
+test('real cached update progress distinguishes verification from reuse and preserves completion details', () => {
+  for (const language of ['zh', 'en']) {
+    const host = componentHost(null, language);
+    const cached = { downloadedBytes: 52394635, totalBytes: 52394635, fromCache: true };
+    try {
+      const verifying = host.render(host.exports.UpdateProgress, {
+        progress: { ...cached, phase: 'verifying' },
+      });
+      assert.match(text(verifying), language === 'zh' ? /正在校验缓存/ : /Verifying cached update/);
+      assert.doesNotMatch(text(verifying), /已校验|verified/i);
+      for (const phase of ['ready', 'install']) {
+        const ready = host.render(host.exports.UpdateProgress, { progress: { ...cached, phase } });
+        assert.match(text(ready), /52\.39 MB/);
+        assert.match(
+          text(ready),
+          language === 'zh'
+            ? /复用已校验更新包，无需重复下载/
+            : /Reusing the verified update package\. No download needed/,
+        );
+        assert.doesNotMatch(text(ready), /%|正在校验|Verifying/);
+      }
+      const downloaded = host.render(host.exports.UpdateProgress, {
+        progress: { ...cached, fromCache: false, phase: 'ready' },
+      });
+      assert.match(text(downloaded), language === 'zh' ? /更新包校验完成/ : /Package verified/);
+      assert.doesNotMatch(text(downloaded), /复用|Reusing|正在校验|Verifying/);
+      const complete = host.render(host.exports.UpdateProgress, {
+        progress: { ...cached, phase: 'install' },
+        completed: true,
+      });
+      assert.equal(elements(complete).find((node) => node.type === 'progress').props.value, 100);
+      assert.match(
+        text(complete),
+        language === 'zh' ? /视频、图片和设置已保留/ : /Videos, images and settings have been kept/,
+      );
+    } finally {
+      host.reset();
+    }
   }
 });
 

@@ -605,6 +605,87 @@ function preparedStatus(version) {
   };
 }
 
+test('fast prepared updates propagate verified bytes and cache state before installation even if polling is late', async () => {
+  for (const [version, fromCache] of [
+    ['1.4.201', true],
+    ['1.4.202', false],
+  ]) {
+    const { status, staged } = preparedStatus(version);
+    Object.assign(staged, { bytes: 52394635, fromCache });
+    const progress = [];
+    let finishPoll;
+    const request = async (path) => {
+      if (path === '/updates/prepare') return staged;
+      if (path === '/updates/progress')
+        return new Promise((resolve) => {
+          finishPoll = resolve;
+        });
+      return { acknowledged: true };
+    };
+    await prepareAndInstallUpdate(request, status, {
+      onProgress: (value) => progress.push(value),
+      install: async (spec, installedVersion) => {
+        assert.equal(spec, staged.spec);
+        assert.equal(installedVersion, version);
+        assert.deepEqual(progress.at(-1), {
+          version,
+          phase: 'install',
+          downloadedBytes: 52394635,
+          totalBytes: 52394635,
+          fromCache,
+          percent: null,
+        });
+        finishPoll({
+          version,
+          phase: 'downloading',
+          downloadedBytes: 1,
+          totalBytes: 2,
+          fromCache: !fromCache,
+        });
+        return { application: 'applied' };
+      },
+    });
+    assert.equal(progress.at(-1).phase, 'complete');
+    assert.equal(progress.at(-1).totalBytes, 52394635);
+    assert.equal(progress.at(-1).fromCache, fromCache);
+    assert.equal(
+      progress.some((value) => value.phase === 'downloading'),
+      false,
+    );
+  }
+});
+
+test('legacy prepare responses preserve measured polling details during installation', async () => {
+  const { status, staged } = preparedStatus('1.4.203');
+  const progress = [];
+  const request = async (path) => {
+    if (path === '/updates/prepare') {
+      await new Promise((resolve) => setImmediate(resolve));
+      return staged;
+    }
+    if (path === '/updates/progress')
+      return {
+        version: staged.version,
+        phase: 'ready',
+        downloadedBytes: 456789,
+        totalBytes: 456789,
+        fromCache: true,
+      };
+    return { acknowledged: true };
+  };
+  await prepareAndInstallUpdate(request, status, {
+    onProgress: (value) => progress.push(value),
+    install: async () => {
+      assert.equal(progress.at(-1).phase, 'install');
+      assert.equal(progress.at(-1).downloadedBytes, 456789);
+      assert.equal(progress.at(-1).totalBytes, 456789);
+      assert.equal(progress.at(-1).fromCache, true);
+      assert.equal(progress.at(-1).percent, null);
+      return { application: 'applied' };
+    },
+  });
+});
+
 test('successful install remains successful if cleanup acknowledgement fails, and can retry acknowledgement', async () => {
   const { status, staged } = preparedStatus('1.3.41');
   let installs = 0,

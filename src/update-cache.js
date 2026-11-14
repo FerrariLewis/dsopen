@@ -174,7 +174,10 @@ export function createUpdateCache({
         ),
       });
     };
-    const references = await referenceFiles();
+    // Most launches contain only the currently referenced installer. Reading
+    // every profile lockfile is needed only for an otherwise deletable archive;
+    // partial downloads and unrelated entries never depend on those files.
+    let references;
     const retained = new Set(keepSpecs.map(pathKey));
     for (const name of entries) {
       const archive = cachedArchiveIdentity(name),
@@ -200,6 +203,7 @@ export function createUpdateCache({
           defer(name, 'download-in-progress', true);
           continue;
         }
+        if (archive) references ||= await referenceFiles();
         if (archive && references.error) {
           defer(name, references.error, references.retryable);
           continue;

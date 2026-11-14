@@ -2,7 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { gunzip, gunzipSync } from 'node:zlib';
 import { promisify } from 'node:util';
 import { setImmediate as yieldTurn } from 'node:timers/promises';
-import { mkdir, readFile, writeFile, rename, lstat, unlink } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { mkdir, open, readFile, readdir, writeFile, rename, lstat, unlink } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { validateReleaseNotes, packageReleaseNotesEn } from './release-notes.js';
 import { createUpdateCache, cachedArchiveIdentity } from './update-cache.js';
@@ -570,6 +571,47 @@ async function responseBytes(response, limit, signal, { onProgress, budget, expe
   return Buffer.concat(chunks, size);
 }
 
+function sameCacheFile(first, second) {
+  return (
+    second.isFile() &&
+    !second.isSymbolicLink() &&
+    first.dev === second.dev &&
+    first.ino === second.ino &&
+    first.size === second.size &&
+    first.mtimeMs === second.mtimeMs &&
+    first.ctimeMs === second.ctimeMs
+  );
+}
+
+/** A cache file is untrusted input. Bound the read even if another process
+ * grows/replaces it between lstat and open, and never accept a symbolic link. */
+async function readCachedArchive(path) {
+  const info = await lstat(path);
+  if (!info.isFile() || info.isSymbolicLink() || info.size <= 0 || info.size > MAX_PACKAGE_BYTES)
+    throw updateError('更新缓存文件无效。', 'BOOT_UPDATE_CACHE');
+  const handle = await open(path, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW || 0));
+  try {
+    if (!sameCacheFile(info, await handle.stat()))
+      throw updateError('更新缓存文件已变化。', 'BOOT_UPDATE_CACHE');
+    const buffer = Buffer.allocUnsafe(info.size + 1);
+    let size = 0;
+    while (size < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, size, buffer.length - size, null);
+      if (!bytesRead) break;
+      size += bytesRead;
+    }
+    if (
+      size !== info.size ||
+      !sameCacheFile(info, await handle.stat()) ||
+      !sameCacheFile(info, await lstat(path))
+    )
+      throw updateError('更新缓存文件已变化。', 'BOOT_UPDATE_CACHE');
+    return { bytes: buffer.subarray(0, size), info };
+  } finally {
+    await handle.close();
+  }
+}
+
 /** Only checks and stages verified files. Installation belongs to the owner's official Remote API. */
 export function createUpdateService({
   dataDir,
@@ -600,6 +642,7 @@ export function createUpdateService({
     totalBytes: null,
     percent: null,
     attempt: 0,
+    fromCache: false,
   };
   const progress = () => ({ ...snapshot });
   const publish = (patch) => {
@@ -744,6 +787,102 @@ export function createUpdateService({
       throw Object.assign(error, { code: 'BOOT_UPDATE_INSTALL_ACK_INVALID' });
     }
   }
+  async function validatePackage(bytes, status) {
+    const { manifest } = status;
+    const pkg = await readPackageManifestAsync(bytes);
+    if (
+      pkg.name !== status.packageName ||
+      pkg.version !== manifest.version ||
+      !['./cordis.patch.yml', 'cordis.patch.yml'].includes(pkg.dsh?.bundle?.patch)
+    )
+      throw updateError('更新包的名称、版本或插件声明不匹配。');
+    if (validateReleaseNotes(pkg.lewisEnchantRelease, pkg.version) !== manifest.releaseNotes)
+      throw updateError('更新包中的作者说明与本次检查结果不一致，请重新检查更新。');
+    if (packageReleaseNotesEn(pkg) !== (manifest.releaseNotesEn ?? null))
+      throw updateError('更新包中的作者说明与本次检查结果不一致，请重新检查更新。');
+    for (const key of [
+      'preinstall',
+      'install',
+      'postinstall',
+      'prepare',
+      'preprepare',
+      'postprepare',
+    ])
+      if (pkg.scripts?.[key])
+        throw updateError('维护包包含安装脚本，请通过 Harness 插件管理器人工检查。');
+    if (
+      manifest.source === 'npm' &&
+      (!repositoryMatches(pkg.repository, repo) ||
+        ['dependencies', 'optionalDependencies', 'peerDependencies'].some(
+          (key) => Object.keys(pkg[key] ?? {}).length,
+        ))
+    )
+      throw updateError('npm 更新包必须属于本项目且不含运行依赖。');
+    return pkg;
+  }
+  async function cacheDirectory() {
+    try {
+      const info = await lstat(cacheDir);
+      if (!info.isDirectory() || info.isSymbolicLink())
+        throw updateError('更新缓存目录无效。', 'BOOT_UPDATE_CACHE');
+      return true;
+    } catch (error) {
+      if (error.code === 'ENOENT') return false;
+      throw error;
+    }
+  }
+  async function reuseArchive(status, onVerifying) {
+    if (!(await cacheDirectory())) return null;
+    const candidates = (await readdir(cacheDir))
+      .map((name) => ({ path: join(cacheDir, name), expected: cachedArchiveIdentity(name) }))
+      .filter(
+        ({ expected }) =>
+          expected?.packageName === status.packageName &&
+          expected.version === status.manifest.version,
+      );
+    if (!candidates.length) return null;
+    // Protect before any candidate I/O can yield to a concurrent cleanup scan.
+    for (const { path } of candidates) cache.protect(path);
+    try {
+      // Protection cannot cancel an unlink already submitted by an earlier scan.
+      // Drain that serialized work before reading; a removed candidate becomes a
+      // cache miss, and the new scan preserves every still-protected candidate.
+      await cleanup();
+      for (const { path, expected } of candidates) {
+        let accepted = false;
+        try {
+          const { bytes, info } = await readCachedArchive(path);
+          onVerifying(bytes.length, true);
+          const { manifest } = status;
+          if (
+            manifest.source === 'npm' &&
+            'sha512-' + (await digest(bytes, 'sha512', 'base64')) !== manifest.integrity
+          )
+            continue;
+          const sha256 = await digest(bytes, 'sha256', 'hex');
+          if (
+            sha256 !== expected.sha256 ||
+            (manifest.source !== 'npm' &&
+              (sha256 !== manifest.sha256 || bytes.length !== manifest.bytes))
+          )
+            continue;
+          await validatePackage(bytes, status);
+          if (!(await cacheDirectory()) || !sameCacheFile(info, await lstat(path))) continue;
+          stagedPaths.add(path);
+          accepted = true;
+          return { path, bytes: bytes.length, sha256 };
+        } catch {
+          // A stale, unreadable, corrupt or unsafe cache entry is never installed.
+          // The normal download path still verifies the current trusted manifest.
+        } finally {
+          if (!accepted) stagedPaths.delete(path);
+        }
+      }
+      return null;
+    } finally {
+      for (const { path } of candidates) if (!stagedPaths.has(path)) cache.unprotect(path);
+    }
+  }
   async function prepare(requestedVersion) {
     if (preparing) {
       if (requestedVersion !== preparingVersion)
@@ -758,6 +897,7 @@ export function createUpdateService({
       totalBytes: null,
       percent: null,
       attempt: 0,
+      fromCache: false,
     };
     preparing = (async () => {
       const status = await check();
@@ -765,8 +905,27 @@ export function createUpdateService({
         throw updateError('更新版本已变化或尚未发布，请重新检查更新。');
       const manifest = status.manifest;
       let bytes, sha256;
-      const onVerifying = (size) =>
-        publish({ phase: 'verifying', downloadedBytes: size, totalBytes: size, percent: 100 });
+      const onVerifying = (size, fromCache = false) =>
+        publish({
+          phase: 'verifying',
+          downloadedBytes: size,
+          totalBytes: size,
+          percent: 100,
+          fromCache,
+        });
+      const cached = await reuseArchive(status, onVerifying);
+      if (cached) {
+        publish({ phase: 'ready', fromCache: true });
+        return {
+          version: manifest.version,
+          spec: cached.path,
+          sha256: cached.sha256,
+          requiresRestart: true,
+          fromCache: true,
+          bytes: cached.bytes,
+        };
+      }
+      publish({ fromCache: false });
       if (manifest.source === 'npm')
         bytes = await npmArchive(fetchImpl, manifest, {
           onProgress: publish,
@@ -813,42 +972,17 @@ export function createUpdateService({
           budget.dispose();
         }
       }
-      const pkg = await readPackageManifestAsync(bytes);
-      if (
-        pkg.name !== status.packageName ||
-        pkg.version !== manifest.version ||
-        !['./cordis.patch.yml', 'cordis.patch.yml'].includes(pkg.dsh?.bundle?.patch)
-      )
-        throw updateError('更新包的名称、版本或插件声明不匹配。');
-      if (validateReleaseNotes(pkg.lewisEnchantRelease, pkg.version) !== manifest.releaseNotes)
-        throw updateError('更新包中的作者说明与本次检查结果不一致，请重新检查更新。');
-      if (packageReleaseNotesEn(pkg) !== (manifest.releaseNotesEn ?? null))
-        throw updateError('更新包中的作者说明与本次检查结果不一致，请重新检查更新。');
-      for (const key of [
-        'preinstall',
-        'install',
-        'postinstall',
-        'prepare',
-        'preprepare',
-        'postprepare',
-      ])
-        if (pkg.scripts?.[key])
-          throw updateError('维护包包含安装脚本，请通过 Harness 插件管理器人工检查。');
-      if (
-        manifest.source === 'npm' &&
-        (!repositoryMatches(pkg.repository, repo) ||
-          ['dependencies', 'optionalDependencies', 'peerDependencies'].some(
-            (key) => Object.keys(pkg[key] ?? {}).length,
-          ))
-      )
-        throw updateError('npm 更新包必须属于本项目且不含运行依赖。');
+      const pkg = await validatePackage(bytes, status);
       sha256 ??= await digest(bytes, 'sha256', 'hex');
       await mkdir(cacheDir, { recursive: true });
-      const cacheInfo = await lstat(cacheDir);
-      if (!cacheInfo.isDirectory() || cacheInfo.isSymbolicLink())
-        throw updateError('更新缓存目录无效。', 'BOOT_UPDATE_CACHE');
+      if (!(await cacheDirectory())) throw updateError('更新缓存目录无效。', 'BOOT_UPDATE_CACHE');
       await cleanup();
       const path = join(cacheDir, `${pkg.name}-${pkg.version}-${sha256}.tgz`);
+      const previous = await lstat(path).catch((error) => {
+        if (error.code !== 'ENOENT') throw error;
+      });
+      if (previous && (!previous.isFile() || previous.isSymbolicLink()))
+        throw updateError('更新缓存文件无效。', 'BOOT_UPDATE_CACHE');
       const temp = join(cacheDir, `${randomUUID()}.part`);
       cache.protect(temp);
       try {
@@ -865,8 +999,16 @@ export function createUpdateService({
         downloadedBytes: bytes.length,
         totalBytes: bytes.length,
         percent: 100,
+        fromCache: false,
       });
-      return { version: manifest.version, spec: path, sha256, requiresRestart: true };
+      return {
+        version: manifest.version,
+        spec: path,
+        sha256,
+        requiresRestart: true,
+        fromCache: false,
+        bytes: bytes.length,
+      };
     })();
     try {
       return await preparing;
