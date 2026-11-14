@@ -71,9 +71,9 @@ async function fixture(t, options = {}) {
     ctx,
     pluginVersion: '1.3.4',
     endpoint: 'https://collector.example.invalid',
-    fetchImpl,
     now: () => new Date(now),
     ...options,
+    fetchImpl,
   });
   t.after(async () => {
     service.dispose();
@@ -130,7 +130,7 @@ test('explicit consent persists; real runtime metadata, daily limit, field minim
           profileReads,
         }),
       );
-    return !!status.lastSentAt;
+    return !!status.lastSentAt && !status.reporting;
   });
   const event = requests.find((r) => r.url.endsWith('/api/events')).body;
   assert.equal(event.harnessVersion, '0.2.1-rc.5');
@@ -249,4 +249,72 @@ test('corrupted consent state fails closed', async (t) => {
   await writeFile(join(dataDir, 'telemetry.json'), 'not json');
   await assert.rejects(service.report(receipt));
   assert.equal(requests.length, 0);
+});
+
+test('transient network failure retries registration; daily check preserves the successful result', async (t) => {
+  let attempts = 0;
+  const { service, requests } = await fixture(t, {
+    fetchImpl: async (url) => {
+      if (url.endsWith('/api/registrations') && attempts++ === 0)
+        throw Object.assign(new TypeError('private-network-detail'), {
+          cause: { code: 'ECONNRESET' },
+        });
+      return json(url.endsWith('/api/registrations') ? { credential: 'retry-secret' } : {});
+    },
+  });
+  await service.grant(receipt);
+  await waitFor(async () => (await service.status()).lastResult?.sent);
+  assert.equal(attempts, 2);
+  const registrations = requests.filter((r) => r.url.endsWith('/api/registrations'));
+  assert.equal(registrations[0].body.installationId, registrations[1].body.installationId);
+  await service.report(receipt);
+  assert.equal((await service.status()).lastResult.sent, true);
+});
+
+test('failure is visible and explicit retry works without revoking consent', async (t) => {
+  let offline = true;
+  const { service } = await fixture(t, {
+    fetchImpl: async (url) => {
+      if (offline)
+        throw Object.assign(new TypeError('DO-NOT-EXPOSE-PRIVATE-DETAIL'), {
+          cause: { code: 'ENOTFOUND' },
+        });
+      return json(url.endsWith('/api/registrations') ? { credential: 'retry-secret' } : {});
+    },
+  });
+  assert.equal((await service.retry(receipt)).enabled, false);
+  await service.grant(receipt);
+  await waitFor(async () => (await service.status()).lastResult?.reason === 'unavailable');
+  const failed = await service.status();
+  assert.equal(failed.lastResult.stage, 'registration');
+  assert.equal(failed.lastResult.failureCode, 'ENOTFOUND');
+  assert.doesNotMatch(JSON.stringify(failed), /DO-NOT-EXPOSE|retry-secret/);
+  offline = false;
+  assert.equal((await service.retry(receipt)).reporting, true);
+  await waitFor(async () => (await service.status()).lastResult?.sent);
+  assert.equal((await service.status()).consentAt, failed.consentAt);
+});
+
+test('a newly available account can identify an anonymous installation during the daily limit', async (t) => {
+  const { service, ctx, requests } = await fixture(t);
+  const account = ctx.deepseekAccount;
+  ctx.deepseekAccount = null;
+  await service.grant(receipt);
+  await waitFor(async () => (await service.status()).lastResult?.sent);
+  assert.equal((await service.status()).lastResult.accountIdentified, false);
+  const count = requests.length;
+  assert.equal((await service.report(receipt)).reason, 'daily-limit');
+  assert.equal(requests.length, count);
+  ctx.deepseekAccount = account;
+  assert.equal((await service.report(receipt)).accountIdentified, true);
+  assert.equal(requests.at(-1).body.account.name, '测试昵称');
+  assert.equal((await service.report(receipt)).reason, 'daily-limit');
+});
+
+test('a conflicting registration is not retried and reports the safe HTTP status', async (t) => {
+  const { service, requests } = await fixture(t, { fetchImpl: async () => json({}, 409) });
+  await service.grant(receipt);
+  await waitFor(async () => (await service.status()).lastResult?.reason === 'unavailable');
+  assert.equal(requests.length, 1);
+  assert.equal((await service.status()).lastResult.httpStatus, 409);
 });

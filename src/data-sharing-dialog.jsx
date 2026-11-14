@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useEnchantAppearance } from './enchant-theme.jsx';
 import { useStudioStyles } from './studio-styles.jsx';
 import { CloseIcon } from './close-icon.jsx';
-import { useI18n, localizeMessage } from './i18n.jsx';
+import { useI18n } from './i18n.jsx';
 import { api } from './api-client.js';
 import { telemetryMetadata } from './telemetry-runtime.js';
 
@@ -13,49 +13,100 @@ export function DataSharingDialog({ onClose, onStatus }) {
   const dialog = useRef(null),
     closeButton = useRef(null),
     alive = useRef(true),
-    lock = useRef(false);
+    lock = useRef(false),
+    operation = useRef({ sequence: 0 });
   const [status, setStatus] = useState(null),
     [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [pollExpired, setPollExpired] = useState(false);
   useEffect(() => {
     alive.current = true;
+    let active = true;
+    const controller = new AbortController(),
+      requestVersion = operation.current;
     const element = dialog.current,
       previous = document.activeElement;
     if (typeof element.showModal === 'function') {
       if (!element.open) element.showModal();
     } else element.setAttribute('open', '');
     closeButton.current?.focus();
-    api('/telemetry')
+    api('/telemetry', { signal: controller.signal })
       .then((value) => {
-        if (alive.current) {
+        if (active) {
           setStatus(value);
           onStatus?.(value);
         }
       })
-      .catch((reason) => {
-        if (alive.current) setError(reason);
+      .catch(() => {
+        if (active) setError('load');
       });
     return () => {
+      active = false;
       alive.current = false;
+      requestVersion.sequence++;
+      controller.abort();
       if (element.open && typeof element.close === 'function') element.close();
       if (previous?.isConnected) previous.focus?.();
     };
   }, [onStatus]);
+  const awaitingReport = Boolean(
+    status?.enabled && (status.reporting || status.lastResult == null),
+  );
+  useEffect(() => {
+    if (!awaitingReport || busy) return;
+    let active = true,
+      timer,
+      controller;
+    const sequence = operation.current.sequence;
+    setPollExpired(false);
+    const current = () => active && alive.current && operation.current.sequence === sequence;
+    function stop() {
+      active = false;
+      clearTimeout(timer);
+      controller?.abort();
+      clearTimeout(deadline);
+    }
+    const deadline = setTimeout(() => {
+      if (current()) setPollExpired(true);
+      stop();
+    }, 90000);
+    function schedule() {
+      timer = setTimeout(async () => {
+        if (!current()) return;
+        controller = new AbortController();
+        try {
+          const value = await api('/telemetry', { signal: controller.signal });
+          if (!current()) return;
+          setStatus(value);
+          onStatus?.(value);
+          if (value.enabled && (value.reporting || value.lastResult == null)) schedule();
+          else stop();
+        } catch {
+          if (current()) setError('refresh');
+          stop();
+        }
+      }, 1000);
+    }
+    schedule();
+    return stop;
+  }, [awaitingReport, busy, onStatus]);
   async function change(path, body) {
     if (lock.current) return;
     lock.current = true;
+    const sequence = ++operation.current.sequence;
     setBusy(true);
     setError('');
+    setPollExpired(false);
     try {
       const value = await api(path, { method: 'POST', body: JSON.stringify(body) });
-      if (alive.current) {
+      if (alive.current && sequence === operation.current.sequence) {
         setStatus(value);
         setConfirmed(false);
         onStatus?.(value);
       }
-    } catch (reason) {
-      if (alive.current) setError(reason);
+    } catch {
+      if (alive.current && sequence === operation.current.sequence) setError('change');
     } finally {
       lock.current = false;
       if (alive.current) setBusy(false);
@@ -65,6 +116,36 @@ export function DataSharingDialog({ onClose, onStatus }) {
     if (!lock.current) onClose();
   };
   const stopped = status && !status.enabled && status.lastResult?.withdrawn;
+  const result = status?.lastResult;
+  const sentAt = status?.lastSentAt && new Date(status.lastSentAt);
+  const sentAtLabel =
+    sentAt && Number.isFinite(sentAt.getTime())
+      ? sentAt.toLocaleString(t('zh-CN', 'en-US'))
+      : t('尚无成功上报', 'No successful report yet');
+  const failureCode =
+    /^(?:HTTP_[1-5]\d\d|ECONNRESET|ETIMEDOUT|ENOTFOUND|AbortError|TimeoutError|TypeError|Error)$/.test(
+      result?.failureCode || '',
+    )
+      ? result.failureCode
+      : null;
+  const httpStatus =
+    Number.isInteger(result?.httpStatus) && result.httpStatus >= 100 && result.httpStatus <= 599
+      ? result.httpStatus
+      : null;
+  const reportSummary =
+    result?.sent === true
+      ? result.accountIdentified === true
+        ? t('上报成功，已识别 DeepSeek 账户。', 'Report sent; the DeepSeek account was identified.')
+        : t(
+            '上报成功，仅包含安装数据，未识别已登录账户。',
+            'Report sent with installation data only; no signed-in account was identified.',
+          )
+      : result?.sent === false
+        ? t(
+            '最近一次上报未成功，可重试上报。',
+            'The latest report was not sent. You can retry reporting.',
+          )
+        : null;
   return (
     <dialog
       ref={dialog}
@@ -150,19 +231,55 @@ export function DataSharingDialog({ onClose, onStatus }) {
             )}
           </p>
         )}
-        {status?.endpoint && (
-          <p className="bs-sharing-endpoint">
-            {t('接收服务：', 'Collector: ')}
-            {status.endpoint}
-          </p>
-        )}
+        <p className="bs-sharing-endpoint">
+          <a
+            href="https://dsopen-console-lewis.lewiszhouyichen.chatgpt.site"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t('作者后台（仅作者可访问）', 'Author dashboard (author access only)')}
+          </a>
+          <br />
+          {t(
+            '请使用作者的 OpenAI / ChatGPT 账户登录。',
+            "Sign in with the author's OpenAI / ChatGPT account.",
+          )}
+        </p>
         {status?.enabled && (
-          <p className="bs-sharing-active" role="status">
-            {t(
-              '数据共享已开启。之后将按上述范围自动上报。',
-              'Sharing is enabled. Future reports follow the scope above.',
+          <div className="bs-sharing-active" role="status" data-testid="sharing-report-status">
+            <p>
+              {t(
+                '数据共享已开启。之后将按上述范围自动上报。',
+                'Sharing is enabled. Future reports follow the scope above.',
+              )}
+            </p>
+            {(status.reporting || result == null) && !pollExpired && (
+              <p>
+                {status.lastSentAt
+                  ? t('正在上报，请稍候…', 'Reporting; please wait…')
+                  : t('首次上报中，请稍候…', 'Sending the first report; please wait…')}
+              </p>
             )}
-          </p>
+            <p>
+              {t('上次成功上报：', 'Last successful report: ')}
+              {sentAtLabel}
+            </p>
+            {reportSummary && <p>{reportSummary}</p>}
+            {result?.sent === false && (failureCode || httpStatus) && (
+              <p>
+                {t('诊断摘要：', 'Diagnostic summary: ')}
+                {[failureCode, httpStatus && `HTTP ${httpStatus}`].filter(Boolean).join(' · ')}
+              </p>
+            )}
+            {pollExpired && (
+              <p>
+                {t(
+                  '等待上报结果已超过 90 秒，请稍后重新打开此窗口查看状态。',
+                  'Waiting for the report exceeded 90 seconds. Reopen this window later to check its status.',
+                )}
+              </p>
+            )}
+          </div>
         )}
         {status?.authorizationRequired && (
           <p role="status">
@@ -190,7 +307,20 @@ export function DataSharingDialog({ onClose, onStatus }) {
         )}
         {error && (
           <p className="bs-startup-update-error" role="alert">
-            {localizeMessage(error)}
+            {error === 'load'
+              ? t(
+                  '暂时无法读取共享状态，请关闭后重试。',
+                  'Sharing status is unavailable. Close this window and try again.',
+                )
+              : error === 'refresh'
+                ? t(
+                    '暂时无法刷新上报状态，请稍后重新打开此窗口查看。',
+                    'Report status could not be refreshed. Reopen this window later to check it.',
+                  )
+                : t(
+                    '操作未完成，请检查网络连接后重试。',
+                    'The operation did not complete. Check your connection and try again.',
+                  )}
           </p>
         )}
         {status && !status.enabled && !status.withdrawalPending && (
@@ -213,6 +343,15 @@ export function DataSharingDialog({ onClose, onStatus }) {
           <button type="button" disabled={busy} onClick={close}>
             {t('关闭', 'Close')}
           </button>
+          {status?.enabled && (
+            <button
+              type="button"
+              disabled={busy || Boolean(status.reporting)}
+              onClick={() => change('/telemetry/retry', telemetryMetadata())}
+            >
+              {t('重试上报', 'Retry reporting')}
+            </button>
+          )}
           {status &&
           (status.enabled || status.withdrawalPending || status.authorizationRequired) ? (
             <button type="button" disabled={busy} onClick={() => change('/telemetry/withdraw', {})}>

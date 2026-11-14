@@ -29,6 +29,10 @@ test('data sharing uses protected dedicated routes, consent fields and runtime m
       calls.push(['report', value]);
       return { sent: false };
     },
+    retry: async (value) => {
+      calls.push(['retry', value]);
+      return { enabled: true, reporting: true };
+    },
     dispose() {},
   };
   const f = await fixture(t, { telemetryService });
@@ -69,6 +73,19 @@ test('data sharing uses protected dedicated routes, consent fields and runtime m
   assert.deepEqual(calls[1], ['report', { locale: 'en', harnessVersion: '0.2.1-rc.5' }]);
   assert.equal((await f.postJSON('/telemetry/withdraw', {})).json().enabled, false);
   assert.deepEqual(calls[2], ['withdraw']);
+  assert.equal(
+    (
+      await f.request('/telemetry/retry', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })
+    ).status,
+    403,
+  );
+  assert.equal((await f.postJSON('/telemetry/retry', { token: 'forbidden' })).status, 400);
+  assert.equal((await f.postJSON('/telemetry/retry', { locale: 'zh-CN' })).json().reporting, true);
+  assert.deepEqual(calls[3], ['retry', { locale: 'zh-CN', harnessVersion: null }]);
 });
 
 const video = (size = 32) => {
