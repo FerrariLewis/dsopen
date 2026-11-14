@@ -35,6 +35,17 @@ export function localizedName(item) {
 }
 
 const MESSAGES = Object.freeze({
+  '数据共享授权字段无效。': 'The data-sharing authorization fields are invalid.',
+  '开发者尚未配置数据接收服务，当前不会发送任何数据。':
+    'The developer has not configured a collector. No data is currently sent.',
+  '暂时无法读取插件版本，请稍后重试。':
+    'The plugin version is unavailable. Please try again later.',
+  '请阅读并明确同意当前版本的数据共享说明。':
+    'Read and explicitly agree to the current data-sharing notice.',
+  '此前的数据删除请求尚未完成，请先重试删除。':
+    'The previous deletion request is incomplete. Retry deletion first.',
+  '数据接收服务已变更，请先停止共享并删除原服务中的数据。':
+    'The collector has changed. Stop sharing and delete data from the previous collector first.',
   '设置已保存，下次启动生效': 'Settings saved. Changes take effect on the next launch.',
   '已恢复默认，全部上传的视频和图片已删除。':
     'Defaults restored. All uploaded videos and images have been deleted.',
@@ -429,6 +440,34 @@ const CODE_MESSAGES = Object.freeze({
   BOOT_VERSION_INVALID: [
     '维护版本必须使用 X.Y.Z 稳定版本号。',
     'Release versions must use a stable X.Y.Z version number.',
+  ],
+  BOOT_TELEMETRY_CONSENT_FIELDS: [
+    '数据共享授权字段无效。',
+    'The data-sharing authorization fields are invalid.',
+  ],
+  BOOT_TELEMETRY_UNCONFIGURED: [
+    '开发者尚未配置数据接收服务，当前不会发送任何数据。',
+    'The developer has not configured a collector. No data is currently sent.',
+  ],
+  BOOT_TELEMETRY_VERSION_UNAVAILABLE: [
+    '暂时无法读取插件版本，请稍后重试。',
+    'The plugin version is unavailable. Please try again later.',
+  ],
+  BOOT_TELEMETRY_AUTHORIZATION_REQUIRED: [
+    '请阅读并明确同意当前版本的数据共享说明。',
+    'Read and explicitly agree to the current data-sharing notice.',
+  ],
+  BOOT_TELEMETRY_DELETION_PENDING: [
+    '此前的数据删除请求尚未完成，请先重试删除。',
+    'The previous deletion request is incomplete. Retry deletion first.',
+  ],
+  BOOT_TELEMETRY_COLLECTOR_CHANGED: [
+    '数据接收服务已变更，请先停止共享并删除原服务中的数据。',
+    'The collector has changed. Stop sharing and delete data from the previous collector first.',
+  ],
+  BOOT_TELEMETRY_CONSENT: [
+    '数据共享授权未完成，请稍后重试。',
+    'Data-sharing authorization did not complete. Please try again later.',
   ],
 });
 

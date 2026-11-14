@@ -8,6 +8,7 @@ import { OPEN } from './studio-state.js';
 import { SettingsPanel } from './settings-panel.jsx';
 import { BootRoot } from './boot-root.jsx';
 import { ShortcutAction } from './shortcut-action.jsx';
+import { bindTelemetryRuntime } from './telemetry-runtime.js';
 
 export { api } from './api-client.js';
 export { openSettings } from './studio-state.js';
@@ -17,6 +18,7 @@ export { SettingsPanel, BootRoot, ShortcutAction };
 export function apply(ctx) {
   const wire = (ready) => {
     const register = () => {
+      const stopTelemetryRuntime = bindTelemetryRuntime(ready);
       const registry = getEnchantRegistry();
       let unregister;
       const updateName = () => {
@@ -67,11 +69,13 @@ export function apply(ctx) {
           ),
         );
         return () => {
+          stopTelemetryRuntime();
           cancelPendingUpdates();
           stopLocale();
           unregister();
         };
       } catch (error) {
+        stopTelemetryRuntime();
         stopLocale();
         unregister();
         throw error;

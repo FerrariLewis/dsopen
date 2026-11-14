@@ -5,7 +5,12 @@ export const OPEN = `${CORE_PACKAGE_NAME}:open`;
 export const PLAY = `${CORE_PACKAGE_NAME}:play`;
 // One shared module owns launch decisions and published settings for all slots
 // in this renderer, just as the original client entry did before splitting.
-export const launchSession = { bootClaimed: false, request: null, decisionSettled: false };
+export const launchSession = {
+  bootClaimed: false,
+  request: null,
+  telemetryRequest: null,
+  decisionSettled: false,
+};
 export let latestState = null;
 export const subscribers = new Set();
 export const VERSION = typeof __DSH_LEWIS_VERSION__ === 'string' ? __DSH_LEWIS_VERSION__ : null;

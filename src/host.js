@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { createUpdateService } from './updates.js';
 import { BASE_PATH, CORE_PACKAGE_NAME } from './constants.js';
+import { createTelemetryService } from './telemetry-service.js';
 
 export const name = CORE_PACKAGE_NAME;
 export const inject = ['webServer'];
@@ -325,6 +326,14 @@ export function createHandler(options = {}) {
       packageFile: join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'),
     });
   const maxImageUploadBytes = options.maxImageUploadBytes ?? MAX_IMAGE_UPLOAD_BYTES;
+  const telemetry =
+    options.telemetryService ||
+    createTelemetryService({
+      dataDir,
+      ctx: options.telemetryContext || {},
+      getPluginVersion: async () => (await updates.identity()).currentVersion,
+      ...(options.telemetryOptions || {}),
+    });
   const maxCustomMediaBytes = options.maxCustomMediaBytes ?? MAX_CUSTOM_MEDIA_BYTES;
   const maxCustomMediaFiles = options.maxCustomMediaFiles ?? MAX_CUSTOM_MEDIA_FILES;
   // Cache cleanup is independent of personal settings/media availability and
@@ -931,6 +940,45 @@ export function createHandler(options = {}) {
       const path = url.pathname;
       if (path !== BASE_PATH && !path.startsWith(BASE_PATH + '/'))
         throw new HttpError(404, '接口不存在。', 'BOOT_ROUTE_NOT_FOUND');
+      if (req.method === 'GET' && path === BASE_PATH + '/telemetry') {
+        json(res, await telemetry.status());
+        return;
+      }
+      if (req.method === 'POST' && path === BASE_PATH + '/telemetry/consent') {
+        checkWrite(req);
+        const body = await smallJson(req);
+        if (
+          !body ||
+          Object.keys(body).some(
+            (key) => !['confirmed', 'policyVersion', 'locale', 'harnessVersion'].includes(key),
+          )
+        )
+          throw new HttpError(400, '数据共享授权字段无效。', 'BOOT_TELEMETRY_CONSENT_FIELDS');
+        try {
+          json(res, await telemetry.grant(body));
+        } catch (error) {
+          throw new HttpError(400, error.message, error.code || 'BOOT_TELEMETRY_CONSENT');
+        }
+        return;
+      }
+      if (req.method === 'POST' && path === BASE_PATH + '/telemetry/withdraw') {
+        checkWrite(req);
+        await smallJson(req);
+        json(res, await telemetry.withdraw());
+        return;
+      }
+      if (req.method === 'POST' && path === BASE_PATH + '/telemetry/launch') {
+        checkWrite(req);
+        const body = await smallJson(req);
+        json(res, { accepted: true });
+        void telemetry
+          .report({
+            locale: typeof body?.locale === 'string' ? body.locale : undefined,
+            harnessVersion: typeof body?.harnessVersion === 'string' ? body.harnessVersion : null,
+          })
+          .catch(() => {});
+        return;
+      }
       if (req.method === 'GET' && path === BASE_PATH + '/updates/status') {
         json(res, await updates.identity());
         return;
@@ -1136,12 +1184,22 @@ export function createHandler(options = {}) {
       );
     }
   };
-  handler.dispose = () => updates.dispose?.();
+  handler.dispose = () => {
+    telemetry.dispose?.();
+    updates.dispose?.();
+  };
+  handler.setAccountContext = (value) => telemetry.setAccountContext?.(value);
   return handler;
 }
 
 export function apply(ctx) {
   const handler = createHandler();
+  if (typeof ctx.inject === 'function') {
+    ctx.inject(['deepseekAccount'], (ready) => {
+      handler.setAccountContext({ deepseekAccount: ready.deepseekAccount });
+      return () => handler.setAccountContext({ deepseekAccount: null });
+    });
+  }
   const register = () => ctx.webServer.register({ kind: 'prefix', path: BASE_PATH, handler });
   if (typeof ctx.effect === 'function') {
     ctx.effect(register, 'dsh-boot-studio: routes');

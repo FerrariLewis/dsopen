@@ -28,7 +28,13 @@ const jsxReferences = {
     },
   },
 };
-const server = ['src/host.js', 'src/updates.js', 'src/update-cache.js'];
+const server = [
+  'src/host.js',
+  'src/updates.js',
+  'src/update-cache.js',
+  'src/telemetry-service.js',
+  'src/telemetry-adapter.js',
+];
 const shared = ['src/constants.js', 'src/version.js', 'src/release-notes.js'];
 
 export default [

@@ -47,6 +47,7 @@ export async function readJSONResponse(response) {
 }
 
 export function requestTimeout(path) {
+  if (path === '/telemetry/withdraw') return API_TIMEOUTS.telemetryWithdraw;
   if (path === '/updates/prepare') return API_TIMEOUTS.updatePrepare;
   if (path === '/updates/check') return API_TIMEOUTS.updateCheck;
   if (path === '/upload') return API_TIMEOUTS.uploadVideo;

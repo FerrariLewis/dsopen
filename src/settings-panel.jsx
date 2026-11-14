@@ -3,6 +3,7 @@ import { useStudioStyles as useStyles } from './studio-styles.jsx';
 import { UpdatePanel } from './update-panel.jsx';
 import { ResetDialog } from './reset-dialog.jsx';
 import { AuthorDialog } from './author-dialog.jsx';
+import { DataSharingDialog } from './data-sharing-dialog.jsx';
 import { useEnchantAppearance } from './enchant-theme.jsx';
 import { useI18n, localizeMessage } from './i18n.jsx';
 import { api } from './api-client.js';
@@ -42,6 +43,8 @@ export function SettingsPanel({ standalone = false, updateTools }) {
   const [pendingImageDelete, setPendingImageDelete] = useState(null);
   const [resetOpened, setResetOpened] = useState(false);
   const [authorOpened, setAuthorOpened] = useState(false);
+  const [sharingOpened, setSharingOpened] = useState(false);
+  const [sharingStatus, setSharingStatus] = useState(null);
   const input = useRef(null);
   const imageInput = useRef(null);
   const active = useRef(true);
@@ -55,6 +58,11 @@ export function SettingsPanel({ standalone = false, updateTools }) {
       .catch((error) => {
         if (active.current) setError(error);
       });
+    api('/telemetry')
+      .then((value) => {
+        if (active.current) setSharingStatus(value);
+      })
+      .catch(() => {});
     return () => {
       active.current = false;
       subscribers.delete(update);
@@ -350,9 +358,27 @@ export function SettingsPanel({ standalone = false, updateTools }) {
               {t('查看', 'View')}
               <span aria-hidden="true">↗</span>
             </button>
+            <button
+              type="button"
+              data-testid="share-data-entry"
+              onClick={() => setSharingOpened(true)}
+            >
+              {t('与开发者共享数据', 'Share data with the developer')}
+              {sharingStatus?.enabled
+                ? t(' · 已开启', ' · On')
+                : sharingStatus?.withdrawalPending
+                  ? t(' · 删除待重试', ' · Deletion pending')
+                  : ''}
+            </button>
           </div>
           {authorOpened && (
             <AuthorDialog settings={settings} onClose={() => setAuthorOpened(false)} />
+          )}
+          {sharingOpened && (
+            <DataSharingDialog
+              onClose={() => setSharingOpened(false)}
+              onStatus={setSharingStatus}
+            />
           )}
         </>
       )}

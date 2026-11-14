@@ -476,7 +476,8 @@ test('split modules retain client exports, live shared settings, renderer isolat
       await flush();
       host.reset();
     }
-    assert.equal(host.requests.filter(([url]) => url.endsWith('/launch')).length, 1);
+    assert.equal(host.requests.filter(([url]) => url === '/dsh-boot-studio/launch').length, 1);
+    assert.equal(host.requests.filter(([url]) => url.endsWith('/telemetry/launch')).length, 1);
     assert.equal(host.requests.filter(([url]) => url.endsWith('/updates/check')).length, 1);
     assert.equal(host.exports.subscribers.size, 0);
   } finally {

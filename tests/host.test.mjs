@@ -13,6 +13,64 @@ import {
   MAX_CUSTOM_MEDIA_FILES,
 } from '../src/host.js';
 
+test('data sharing uses protected dedicated routes, consent fields and runtime metadata only', async (t) => {
+  const calls = [];
+  const telemetryService = {
+    status: async () => ({ configured: true, enabled: false, policyVersion: '2026-11-14' }),
+    grant: async (value) => {
+      calls.push(['grant', value]);
+      return { enabled: true };
+    },
+    withdraw: async () => {
+      calls.push(['withdraw']);
+      return { enabled: false, withdrawalPending: false };
+    },
+    report: async (value) => {
+      calls.push(['report', value]);
+      return { sent: false };
+    },
+    dispose() {},
+  };
+  const f = await fixture(t, { telemetryService });
+  assert.equal((await f.request('/telemetry')).json().enabled, false);
+  assert.equal(
+    (
+      await f.request('/telemetry/consent', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })
+    ).status,
+    403,
+  );
+  const consent = {
+    confirmed: true,
+    policyVersion: '2026-11-14',
+    locale: 'zh-CN',
+    harnessVersion: '0.2.1-rc.5',
+  };
+  assert.equal(
+    (await f.postJSON('/telemetry/consent', { ...consent, token: 'forbidden' })).status,
+    400,
+  );
+  assert.equal((await f.postJSON('/telemetry/consent', consent)).json().enabled, true);
+  assert.deepEqual(calls[0], ['grant', consent]);
+  assert.equal((await f.postJSON('/settings', { shareDataWithDeveloper: true })).status, 400);
+  assert.equal(
+    (
+      await f.postJSON('/telemetry/launch', {
+        locale: 'en',
+        harnessVersion: '0.2.1-rc.5',
+        token: 'discarded',
+      })
+    ).status,
+    200,
+  );
+  assert.deepEqual(calls[1], ['report', { locale: 'en', harnessVersion: '0.2.1-rc.5' }]);
+  assert.equal((await f.postJSON('/telemetry/withdraw', {})).json().enabled, false);
+  assert.deepEqual(calls[2], ['withdraw']);
+});
+
 const video = (size = 32) => {
   const bytes = Buffer.alloc(size);
   bytes.writeUInt32BE(size, 0);

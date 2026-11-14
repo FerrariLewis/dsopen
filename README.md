@@ -2,6 +2,14 @@
 
 English | [简体中文](./README.cn.md)
 
+## Author dashboard (FerrariLewis only)
+
+[Open the author dashboard](https://dsopen-console-lewis.lewiszhouyichen.chatgpt.site)
+
+Access is restricted to FerrariLewis's own OpenAI / ChatGPT account. This entry is for the author's administration only. Ordinary users do not need an OpenAI account to install, update or use the plugin through npm. Enter `dsh-openup-lewis` in the DeepSeek Harness plugin installation page; the plugin and source repository remain public.
+
+To help the author understand plugin usage, select “Share data with the developer” on the last row of plugin settings and read the notice before choosing to enable it. Sharing is off by default, does not affect plugin features, and can be stopped with a deletion request at any time.
+
 # DSH LEWIS ENCHANTMENT | Startup Animation
 
 ## Disclaimer
@@ -31,6 +39,7 @@ Created as part of DSH LEWIS ENCHANTMENT, this plugin brings full-length startup
 - **Optional shortcut** : Access the plugin through settings by default, or enable a “Startup Animation” button above your avatar. The Enchantment series supports up to 17 shared shortcut entries.
 - **Local storage** : Your videos, images, and playback preferences are stored locally and retained during normal updates.
 - **Restore defaults** : Restore the plugin to its initial state using the button at the bottom of settings. After a second confirmation, all preferences are reset and all uploaded videos and images are permanently deleted. Built-in videos and cover images are retained.
+- **Optional data sharing after updating** : After updating to a version that includes this feature, select “Share data with the developer” beside the author-information action to read the collection notice. Sharing is off by default. After explicit consent, the plugin can report the signed-in nickname, an account identifier used for server-side HMAC deduplication, plugin and Harness versions, platform and language, and activity times. You can stop sharing and request deletion from the same dialog. Login tokens, API keys, contacts, conversations and balances are excluded; account identity remains client-reported and membership level is unavailable. New repository features can precede npm approval; actual installation and update availability follows the official npm `latest` version.
 
 ## Screenshots
 
@@ -38,19 +47,19 @@ Created as part of DSH LEWIS ENCHANTMENT, this plugin brings full-length startup
 
 **Cyperpunk 2077**
 
-![Cyperpunk 2077 title screen](assets/end-covers/cyberpunk-2077.png)
+![Cyperpunk 2077 title screen](assets/end-covers/cyberpunk-2077.webp)
 
 **Forza Horizon 4**
 
-![Forza Horizon 4 title screen](assets/end-covers/horizon4.png)
+![Forza Horizon 4 title screen](assets/end-covers/horizon4.webp)
 
 **Assassin's Creed**
 
-![Assassin's Creed title screen](assets/end-covers/assassins-creed.png)
+![Assassin's Creed title screen](assets/end-covers/assassins-creed.webp)
 
 **Forza Horizon 6**
 
-![Forza Horizon 6 title screen](assets/end-covers/horizon6.png)
+![Forza Horizon 6 title screen](assets/end-covers/horizon6.webp)
 
 ## Plugin Information
 
@@ -59,7 +68,7 @@ Created as part of DSH LEWIS ENCHANTMENT, this plugin brings full-length startup
 | Series | DSH LEWIS ENCHANTMENT · 附魔台|
 | Feature | Startup Animation |
 | Plugin name | dsh-openup-lewis |
-| Current version | 1.3.0 |
+| Current npm version | See the [official npm package page](https://www.npmjs.com/package/dsh-openup-lewis); npm `latest` is the installation and update source of truth. |
 | Author | FerrariLewis |
 | Supported version | DeepSeek Harness ≥ 0.2.1-rc.2 and < 0.3.0 |
 | Desktop platforms |  Windows / macOS. Cross-platform code checks and Chromium playback validation have been completed. Testing on a physical Mac has not yet been performed.|

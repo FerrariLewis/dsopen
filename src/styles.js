@@ -186,6 +186,17 @@ export const CSS = `
 .bs-studio .bs-author-entry>span {min-width:0;overflow-wrap:anywhere;font:inherit}
 .bs-studio .bs-author-entry>button {display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:0 0 auto;min-height:28px;width:auto;max-width:100%;margin:0;padding:3px 9px;border:1px solid color-mix(in srgb,var(--bs-accent) 30%,transparent);border-radius:8px;background:color-mix(in srgb,var(--bs-accent) 6%,transparent);color:var(--bs-text);font:inherit;text-decoration:none;box-shadow:none}
 .bs-studio .bs-author-entry>button:hover {background:color-mix(in srgb,var(--bs-accent) 13%,transparent);border-color:var(--bs-accent)}
+.bs-sharing-dialog {max-height:calc(100dvh - 32px);overflow:auto}
+.bs-sharing-dialog .bs-sharing-card {max-width:620px;padding-top:36px}
+.bs-sharing-notice {font-size:calc(var(--bs-f)*.8571);line-height:1.75;color:var(--bs-secondary)}
+.bs-sharing-notice h3 {font-size:1em;color:var(--bs-text);margin:16px 0 8px}
+.bs-sharing-notice ul {padding-left:1.5em;margin:8px 0}
+.bs-sharing-notice p {margin:12px 0}
+.bs-sharing-consent {display:flex;align-items:flex-start;gap:9px;margin:18px 0;font-size:calc(var(--bs-f)*.8571);line-height:1.6}
+.bs-sharing-consent input {flex:0 0 auto;margin:5px 0 0;accent-color:var(--bs-accent)}
+.bs-sharing-unconfigured {padding:12px;border:1px solid var(--bs-line);border-radius:10px;color:var(--bs-secondary);font-size:calc(var(--bs-f)*.8571);line-height:1.6}
+.bs-sharing-endpoint {overflow-wrap:anywhere;color:var(--bs-tertiary);font-size:calc(var(--bs-f)*.7857)}
+.bs-sharing-active {color:var(--bs-accent);font-size:calc(var(--bs-f)*.8571);line-height:1.6}
 
 /* Native dialogs live in the top layer and receive their own host-theme values. */
 .bs-startup-update {

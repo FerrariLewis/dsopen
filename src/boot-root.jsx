@@ -8,6 +8,7 @@ import { api } from './api-client.js';
 import { SettingsPanel } from './settings-panel.jsx';
 import { Player, playbackStages } from './player.jsx';
 import { OPEN, PLAY, launchSession, latestState, subscribers, publish } from './studio-state.js';
+import { telemetryMetadata } from './telemetry-runtime.js';
 
 export function BootRoot() {
   const t = useI18n();
@@ -34,6 +35,10 @@ export function BootRoot() {
     };
   }, [trigger]);
   useEffect(() => {
+    launchSession.telemetryRequest ||= api('/telemetry/launch', {
+      method: 'POST',
+      body: JSON.stringify(telemetryMetadata()),
+    }).catch(() => {});
     const stateChanged = (value) => setLaunchState(value);
     subscribers.add(stateChanged);
     const unsubscribe = startupUpdateSession.subscribe(setUpdateSnapshot);
