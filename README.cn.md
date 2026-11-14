@@ -2,6 +2,14 @@
 
 [English](./README.md) | 简体中文
 
+## 作者后台入口（仅 FerrariLewis）
+
+[打开作者后台](https://dsopen-console-lewis.lewiszhouyichen.chatgpt.site)
+
+此后台仅允许 FerrariLewis 本人使用自己的 OpenAI / ChatGPT 账户登录访问。此入口仅供作者管理；普通用户无需 OpenAI 账号，即可通过 npm 安装、更新和使用插件。在 DeepSeek Harness 的插件安装页输入上方的 `dsh-openup-lewis` 即可，插件和代码仓库仍公开提供。
+
+如果愿意帮助作者了解插件使用情况，可在插件设置最后一行点击“与开发者共享数据”，阅读说明后自行选择开启。数据共享默认关闭，不影响任何插件功能，可随时停止并请求删除。
+
 # DSH LEWIS ENCHANTMENT｜开机动画
 
 ## 事先声明
@@ -26,6 +34,7 @@
 - **可选快捷入口**：默认从设置进入，可自行开启头像上方的“开机动画”按钮；附魔台系列共享最多 17 个快捷入口。
 - **本地保存**：个人视频、图片和播放偏好保存在本机，正常更新后保留。
 - **恢复默认**：设置底部可一键恢复安装时的状态；二次确认后重置全部偏好并永久删除所有上传的视频和图片，保留内置动画与封面。
+- **新版本新增可选数据共享**：更新到包含此功能的版本后，在作者信息入口旁点击“与开发者共享数据”阅读说明，默认关闭。明确同意后，可上报已登录昵称、用于服务端 HMAC 去重的账户标识、插件与 Harness 版本、系统及语言和活跃时间；可从同一弹窗停止共享并请求删除。不收集登录令牌、API Key、联系方式、聊天内容和余额；账户身份为客户端自报，会员等级没有可用数据来源。仓库中的新增功能可能早于 npm 审批出现，实际可安装和更新的版本以官方 npm `latest` 为准。
 
 ## 产品图片展示
 
@@ -33,19 +42,19 @@
 
 **赛博朋克2077**
 
-![赛博朋克2077标题封面](assets/end-covers/cyberpunk-2077.png)
+![赛博朋克2077标题封面](assets/end-covers/cyberpunk-2077.webp)
 
 **地平线4**
 
-![地平线4标题封面](assets/end-covers/horizon4.png)
+![地平线4标题封面](assets/end-covers/horizon4.webp)
 
 **刺客信条**
 
-![刺客信条标题封面](assets/end-covers/assassins-creed.png)
+![刺客信条标题封面](assets/end-covers/assassins-creed.webp)
 
 **地平线6**
 
-![地平线6标题封面](assets/end-covers/horizon6.png)
+![地平线6标题封面](assets/end-covers/horizon6.webp)
 
 ## 产品基本信息
 
@@ -54,7 +63,7 @@
 | 系列名称 | DSH LEWIS ENCHANTMENT · 附魔台|
 | 功能项目 | 开机动画 |
 | 插件名称 | dsh-openup-lewis |
-| 当前版本 | 1.3.0 |
+| npm 当前版本 | 以[官方 npm 包页面](https://www.npmjs.com/package/dsh-openup-lewis)为准；安装和更新均以 npm `latest` 为准。 |
 | 作者 | FerrariLewis |
 | 适用版本 | DeepSeek Harness ≥ 0.2.1-rc.2 且 < 0.3.0 |
 | 桌面平台 | Windows / macOS；已完成跨平台代码检查及 Chromium 播放验证，macOS 尚未进行真机测试|
