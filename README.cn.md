@@ -2,14 +2,6 @@
 
 [English](./README.md) | 简体中文
 
-## 作者后台入口（仅 FerrariLewis）
-
-[打开作者后台](https://dsopen-console-lewis.lewiszhouyichen.chatgpt.site)
-
-此后台仅允许 FerrariLewis 本人使用自己的 OpenAI / ChatGPT 账户登录访问。此入口仅供作者管理；普通用户无需 OpenAI 账号，即可通过 npm 安装、更新和使用插件。在 DeepSeek Harness 的插件安装页输入上方的 `dsh-openup-lewis` 即可，插件和代码仓库仍公开提供。
-
-如果愿意帮助作者了解插件使用情况，可在插件设置最后一行点击“与开发者共享数据”，阅读说明后自行选择开启。数据共享默认关闭，不影响任何插件功能，可随时停止并请求删除。
-
 # DSH LEWIS ENCHANTMENT｜开机动画
 
 ## 事先声明
@@ -56,6 +48,12 @@
 
 ![地平线6标题封面](assets/end-covers/horizon6.webp)
 
+## 与开发者共享数据
+
+此后台仅允许作者本人使用自己的 OpenAI / ChatGPT 账户登录访问。作者承诺会保护用户隐私。同时，此入口仅供作者管理；普通用户无需 OpenAI 账号，即可通过 npm 安装、更新和使用插件。在 DeepSeek Harness 的插件安装页输入上方的 `dsh-openup-lewis` 即可，插件和代码仓库仍公开提供。
+
+如果愿意帮助作者了解插件使用情况，可在插件设置最后一行点击“与开发者共享数据”，阅读说明后自行选择开启。数据共享默认关闭，不影响任何插件功能，可随时停止并请求删除。
+
 ## 产品基本信息
 
 | 项目 | 信息 |
@@ -73,5 +71,6 @@
 | 视频格式 | MP4 / M4V / WebM，单个文件最大 200 MB |
 | 图片格式 | PNG / JPEG / WebP，单张图片最大 20 MB |
 | 更新入口 | 启动时自动检查；也可进入设置 → 开机动画 → 版本与更新，手动检查。npm 分发版从 npm 源获取已公开的版本|
+| 后台入口 | 仅作者使用：[打开作者后台](https://dsopen-console-lewis.lewiszhouyichen.chatgpt.site) |
 | 开源许可 | [BSD-3-Clause](LICENSE)；素材来源与授权见[第三方说明](THIRD_PARTY_NOTICES.md)。 |
 | 鲸鱼娘素材 | 美术及动画画面按 CC BY-NC-SA 4.0 非商业分发，保留完整作者署名；详见[素材说明](assets/deepsea-notices/ADAPTATION.md)。 |
