@@ -263,7 +263,10 @@ test('transient network failure retries registration; daily check preserves the 
     },
   });
   await service.grant(receipt);
-  await waitFor(async () => (await service.status()).lastResult?.sent);
+  await waitFor(async () => {
+    const state = await service.status();
+    return state.lastResult?.sent && !state.reporting;
+  });
   assert.equal(attempts, 2);
   const registrations = requests.filter((r) => r.url.endsWith('/api/registrations'));
   assert.equal(registrations[0].body.installationId, registrations[1].body.installationId);
@@ -284,14 +287,20 @@ test('failure is visible and explicit retry works without revoking consent', asy
   });
   assert.equal((await service.retry(receipt)).enabled, false);
   await service.grant(receipt);
-  await waitFor(async () => (await service.status()).lastResult?.reason === 'unavailable');
+  await waitFor(async () => {
+    const state = await service.status();
+    return state.lastResult?.reason === 'unavailable' && !state.reporting;
+  });
   const failed = await service.status();
   assert.equal(failed.lastResult.stage, 'registration');
   assert.equal(failed.lastResult.failureCode, 'ENOTFOUND');
   assert.doesNotMatch(JSON.stringify(failed), /DO-NOT-EXPOSE|retry-secret/);
   offline = false;
   assert.equal((await service.retry(receipt)).reporting, true);
-  await waitFor(async () => (await service.status()).lastResult?.sent);
+  await waitFor(async () => {
+    const state = await service.status();
+    return state.lastResult?.sent && !state.reporting;
+  });
   assert.equal((await service.status()).consentAt, failed.consentAt);
 });
 
@@ -300,7 +309,10 @@ test('a newly available account can identify an anonymous installation during th
   const account = ctx.deepseekAccount;
   ctx.deepseekAccount = null;
   await service.grant(receipt);
-  await waitFor(async () => (await service.status()).lastResult?.sent);
+  await waitFor(async () => {
+    const state = await service.status();
+    return state.lastResult?.sent && !state.reporting;
+  });
   assert.equal((await service.status()).lastResult.accountIdentified, false);
   const count = requests.length;
   assert.equal((await service.report(receipt)).reason, 'daily-limit');
@@ -314,7 +326,10 @@ test('a newly available account can identify an anonymous installation during th
 test('a conflicting registration is not retried and reports the safe HTTP status', async (t) => {
   const { service, requests } = await fixture(t, { fetchImpl: async () => json({}, 409) });
   await service.grant(receipt);
-  await waitFor(async () => (await service.status()).lastResult?.reason === 'unavailable');
+  await waitFor(async () => {
+    const state = await service.status();
+    return state.lastResult?.reason === 'unavailable' && !state.reporting;
+  });
   assert.equal(requests.length, 1);
   assert.equal((await service.status()).lastResult.httpStatus, 409);
 });
